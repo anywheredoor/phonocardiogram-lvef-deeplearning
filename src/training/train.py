@@ -23,7 +23,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.datasets.pcg_dataset import CachedPCGDataset, PCGDataset
+from src.datasets.pcg_dataset import CachedPCGDataset, PCGDataset, ef_to_label
 from src.models.models import BACKBONE_CONFIGS, create_model
 from src.utils.metrics import compute_binary_metrics, format_metrics, tune_threshold
 
