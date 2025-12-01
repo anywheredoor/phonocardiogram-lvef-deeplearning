@@ -1,0 +1,33 @@
+# OS / editor cruft
+.DS_Store
+.idea/
+.vscode/
+__pycache__/
+*.pyc
+*.pyo
+
+# Environments
+.env
+.venv/
+venv/
+
+# Data and labels (sensitive)
+/heart_sounds/
+/lvef.csv
+/metadata.csv
+/tf_stats.json
+
+# Derived artifacts
+/splits/
+/cache/
+/checkpoints/
+/checkpoints_cpu/
+/results/
+
+# Model weights / tensors
+*.pth
+*.pt
+*.ckpt
+
+# Misc
+*.log
