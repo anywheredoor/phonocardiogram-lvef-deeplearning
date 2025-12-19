@@ -58,6 +58,14 @@ def parse_args() -> argparse.Namespace:
         help="Skip runs that already have metrics.json in results_dir.",
     )
     parser.add_argument(
+        "--skip_compute_stats",
+        action="store_true",
+        help=(
+            "Skip per-fold TF stats computation. Only use if you provide "
+            "--tf_stats_json via extra args or use cached tensors."
+        ),
+    )
+    parser.add_argument(
         "--dry_run",
         action="store_true",
         help="Print commands without executing.",
@@ -84,6 +92,44 @@ def _find_arg_value(args: List[str], key: str, default: Optional[str] = "") -> s
     return default or ""
 
 
+def _find_arg_list(args: List[str], key: str) -> List[str]:
+    if key not in args:
+        return []
+    idx = args.index(key) + 1
+    values: List[str] = []
+    while idx < len(args) and not args[idx].startswith("--"):
+        values.append(args[idx])
+        idx += 1
+    return values
+
+
+def _slug_list(values: List[str]) -> str:
+    if not values:
+        return "all"
+    return "-".join(str(v) for v in values)
+
+
+def _sanitize(value: str) -> str:
+    safe = value.replace(os.sep, "-").replace(" ", "")
+    for ch in [",", "[", "]", "(", ")", "'", '"', ":", ";"]:
+        safe = safe.replace(ch, "")
+    return safe
+
+
+def _resolve_cached_csv(path: str, representation: str) -> Optional[str]:
+    base = os.path.basename(path)
+    directory = os.path.dirname(path)
+    if base.startswith(f"cached_{representation}_"):
+        return path
+    if base.startswith("cached_metadata_"):
+        return os.path.join(directory, f"cached_{representation}_{base[len('cached_'):]}")
+    if base.startswith("metadata_"):
+        return os.path.join(directory, f"cached_{representation}_{base}")
+    if base.startswith("cached_"):
+        return None
+    return None
+
+
 def main() -> None:
     args = parse_args()
 
@@ -108,7 +154,21 @@ def main() -> None:
         extra_args = extra_args[1:]
 
     backbone = _find_arg_value(extra_args, "--backbone", "backbone")
-    representation = _find_arg_value(extra_args, "--representation", "rep")
+    representation = _find_arg_value(extra_args, "--representation", "mfcc")
+    normalization = _find_arg_value(extra_args, "--normalization", "global")
+    tf_stats_arg = _find_arg_value(extra_args, "--tf_stats_json", "")
+    use_cache = "--use_cache" in extra_args
+
+    train_device_filter = _find_arg_list(extra_args, "--train_device_filter")
+    device_filter = train_device_filter or _find_arg_list(extra_args, "--device_filter")
+    train_position_filter = _find_arg_list(extra_args, "--train_position_filter")
+    position_filter = train_position_filter or _find_arg_list(
+        extra_args, "--position_filter"
+    )
+
+    sample_rate = _find_arg_value(extra_args, "--sample_rate", "2000")
+    fixed_duration = _find_arg_value(extra_args, "--fixed_duration", "4.0")
+    image_size = _find_arg_value(extra_args, "--image_size", "224")
 
     run_count = 0
     for _, row in df.iterrows():
@@ -127,6 +187,67 @@ def main() -> None:
             print(f"Skipping existing run: {run_name}")
             continue
 
+        fold_extra_args = list(extra_args)
+
+        compute_stats = (
+            not args.skip_compute_stats
+            and not use_cache
+            and normalization != "none"
+            and not tf_stats_arg
+        )
+        if use_cache:
+            expected = [
+                _resolve_cached_csv(train_csv, representation),
+                _resolve_cached_csv(val_csv, representation),
+                _resolve_cached_csv(test_csv, representation),
+            ]
+            if any(p is None for p in expected) or any(
+                p is not None and not os.path.exists(p) for p in expected
+            ):
+                print(
+                    "ERROR: --use_cache requires cached CSVs for each fold. "
+                    "Precompute caches per fold or disable --use_cache."
+                )
+                sys.exit(1)
+        if compute_stats:
+            fold_dir = os.path.dirname(train_csv)
+            device_slug = _slug_list(device_filter)
+            position_slug = _slug_list(position_filter)
+            stats_tag = (
+                f"{representation}_{normalization}"
+                f"_dev{device_slug}_pos{position_slug}"
+                f"_sr{sample_rate}_dur{fixed_duration}_im{image_size}"
+            )
+            stats_tag = _sanitize(stats_tag.replace(".", "p"))
+            stats_path = os.path.join(fold_dir, f"tf_stats_{stats_tag}.json")
+            if not os.path.isfile(stats_path):
+                stats_cmd = [
+                    sys.executable,
+                    "-m",
+                    "src.data.compute_stats",
+                    "--train_csv",
+                    train_csv,
+                    "--representations",
+                    representation,
+                    "--output_json",
+                    stats_path,
+                ]
+                if normalization == "per_device":
+                    stats_cmd.append("--per_device")
+                if device_filter:
+                    stats_cmd.append("--device_filter")
+                    stats_cmd.extend(device_filter)
+                if position_filter:
+                    stats_cmd.append("--position_filter")
+                    stats_cmd.extend(position_filter)
+                stats_cmd.extend(["--sample_rate", sample_rate])
+                stats_cmd.extend(["--fixed_duration", fixed_duration])
+                stats_cmd.extend(["--image_size", image_size])
+                print(f"[{run_count:03d}] " + " ".join(stats_cmd))
+                if not args.dry_run:
+                    subprocess.run(stats_cmd, check=True)
+            fold_extra_args.extend(["--tf_stats_json", stats_path])
+
         cmd = [
             sys.executable,
             "-m",
@@ -143,7 +264,7 @@ def main() -> None:
             args.results_dir,
             "--output_dir",
             args.output_dir,
-        ] + extra_args
+        ] + fold_extra_args
 
         cmd_str = " ".join(cmd)
         print(f"[{run_count:03d}] {cmd_str}")

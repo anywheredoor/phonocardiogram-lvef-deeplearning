@@ -1059,20 +1059,21 @@ def main():
 
     mean = std = None
     if not args.use_cache:
-        mean, std = load_tf_stats(
-            args.tf_stats_json, args.representation, args.normalization
-        )
-        if args.normalization == "global" and mean is not None:
-            print(
-                f"Loaded TF stats for {args.representation}: "
-                f"mean={mean:.6f}, std={std:.6f}"
+        if args.normalization != "none":
+            mean, std = load_tf_stats(
+                args.tf_stats_json, args.representation, args.normalization
             )
-        elif args.normalization == "per_device":
-            device_keys = [k for k in mean.keys() if k != "__global__"]
-            print(
-                f"Loaded per-device stats for {args.representation}: "
-                f"{len(device_keys)} device(s)"
-            )
+            if args.normalization == "global" and mean is not None:
+                print(
+                    f"Loaded TF stats for {args.representation}: "
+                    f"mean={mean:.6f}, std={std:.6f}"
+                )
+            elif args.normalization == "per_device":
+                device_keys = [k for k in mean.keys() if k != "__global__"]
+                print(
+                    f"Loaded per-device stats for {args.representation}: "
+                    f"{len(device_keys)} device(s)"
+                )
         else:
             print("Normalisation disabled for on-the-fly features.")
     else:

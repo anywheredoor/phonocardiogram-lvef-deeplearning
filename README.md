@@ -6,7 +6,7 @@ Final Year Project, Bachelor of Biomedical Sciences, Li Ka Shing Faculty of Medi
 - Binary classification: LVEF <= 40% (label 1) vs > 40% (label 0).
 - Inputs: PCG recordings from smartphones (iPhone, Android) and electronic stethoscopes.
 - Representations: MFCC and gammatone spectrograms.
-- Backbones: MobileNet/EfficientNet/Swin via timm.
+- Backbones: MobileNetV2, MobileNetV3-Large, EfficientNet-B0, EfficientNetV2-S, SwinV2-Tiny, SwinV2-Small (via timm).
 - Patient-level splits to avoid leakage; supports within-device, cross-device, and pooled evaluations.
 
 ## Repository Structure
@@ -28,10 +28,9 @@ If you need GPU support, install the appropriate PyTorch build per the official 
 - `heart_sounds/` with per-patient subfolders containing WAV files.
 - `lvef.csv` with columns `patient_id` and `ef`.
 - Filename parsing is defined in `src/data/build_metadata.py` (`FILENAME_RE`, `DEVICE_MAP`); update if your naming differs.
+Sensitive data (raw audio, labels) and derived artifacts are gitignored by default for privacy.
 
-Sensitive data (raw audio, labels) and derived artifacts are gitignored by default for privacy. Store them locally or in secure storage.
-
-## End-to-End Workflow (From Scratch)
+## End-to-End Workflow
 ```bash
 # 1) Build metadata
 python -m src.data.build_metadata \
@@ -51,7 +50,7 @@ python -m src.data.make_patient_cv_splits \
   --n_splits 5 \
   --n_repeats 1
 
-# 4) Compute TF stats (train split only)
+# 4) Compute TF stats (train split only; used for caching or non-CV training)
 python -m src.data.compute_stats \
   --train_csv splits/metadata_train.csv \
   --representations mfcc gammatone
@@ -62,6 +61,8 @@ python -m src.data.precompute_cache --representation mfcc
 python -m src.data.precompute_cache --representation gammatone
 
 # Cached CSVs are named: splits/cached_<representation>_metadata_{train,val,test}.csv
+#
+# If you skip caching, remove --use_cache in steps 7–8 and use splits/metadata_*.csv.
 
 # 6) Run 5-fold CV (default evaluation path)
 python -m src.experiments.run_cv \
@@ -85,6 +86,7 @@ python -m src.training.train \
   --auto_pos_weight \
   --tune_threshold \
   --amp \
+  --save_predictions \
   --results_dir results
 
 # 8) Cross-device evaluation using the saved checkpoint (no retraining)
@@ -96,6 +98,7 @@ python -m src.training.train \
   --test_csv splits/cached_mfcc_metadata_test.csv \
   --test_device_filter iphone digital_stethoscope \
   --per_device_eval \
+  --save_predictions \
   --results_dir results
 ```
 
@@ -109,7 +112,9 @@ python -m src.training.train \
 - Use `--deterministic` for reproducibility (may reduce performance).
 - Default model selection uses 5-fold CV; single-run training is intended for final checkpoints.
 - `--eval_only` uses the checkpoint threshold and skips training (class weighting and tuning are ignored).
-- For strict CV hygiene, compute TF stats per fold and pass `--tf_stats_json` via `run_cv` extra args.
+- `run_cv` computes TF stats per fold by default; disable with `--skip_compute_stats`.
+- `run_cv --use_cache` requires cached CSVs per fold; otherwise keep CV on-the-fly.
+- Save predictions only for final selected models to keep output size manageable.
 
 ## Experiments
 Run within-device experiments manually (repeat per device/representation/backbone):
@@ -159,8 +164,8 @@ python -m src.experiments.run_cv \
   --tune_threshold
 ```
 
-## Dissertation Workflow (Counts)
-- Within-device model selection: 3 devices × 2 representations × 6 backbones = 36 configurations. Default 5-fold CV means 36 × 5 = 180 training jobs (one per fold) to select the best config per device.
+## Dissertation Workflow
+- Within-device model selection: 3 devices × 2 representations × 6 backbones = 36 configurations; use 5-fold CV to select the best config per device.
 - Final within-device checkpoints: CV is only for model selection. After picking the best config per device, train once per device on the standard train/val split to create the reusable `best.pth` checkpoints for cross-device evaluation (3 training runs).
 - Cross-device evaluation: evaluate each device’s checkpoint on the other two devices (3 sources × 2 targets = 6 eval-only runs; no retraining).
 - Pooled model: train 1 pooled model using the config chosen from within-device results, then report overall and per-device performance.
@@ -168,9 +173,10 @@ python -m src.experiments.run_cv \
 ## Outputs
 - `results/summary.csv`: aggregated metrics per run (and per device when enabled).
 - `results/<run_name>/metrics.json` and `metrics.csv`: run metadata + metrics.
-- `results/<run_name>/predictions_{val,test}.csv`: per-example outputs (optional).
-- `results/<run_name>/history.csv`: per-epoch metrics (optional).
+- `results/<run_name>/predictions_{val,test}.csv`: per-example outputs when enabled.
+- `results/<run_name>/history.csv`: per-epoch metrics when enabled.
 - `checkpoints/<run_name>/best.pth`: best checkpoint by validation F1_pos.
+- Suggested analysis flow: use `results/summary.csv` as the master table, aggregate CV folds by config, and use `predictions_test.csv` for ROC/PR curves from final selected models.
 
 ## Colab
 Use `colab_pipeline.ipynb` for a guided end-to-end run on Google Colab.
