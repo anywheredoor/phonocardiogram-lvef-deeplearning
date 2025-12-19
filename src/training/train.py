@@ -11,6 +11,7 @@ Supports:
     - Optional per-device test evaluation.
     - Early stopping on validation F1_pos.
     - Gradient accumulation and LR scheduling.
+    - Eval-only checkpoint evaluation (no retraining).
     - Primary metric: F1 for the positive class (EF <= 40, label=1).
 """
 
@@ -289,6 +290,17 @@ def parse_args() -> argparse.Namespace:
         help="Save per-epoch training/validation history to CSV.",
     )
     parser.add_argument(
+        "--eval_only",
+        action="store_true",
+        help="Skip training and evaluate a saved checkpoint on the splits.",
+    )
+    parser.add_argument(
+        "--checkpoint_path",
+        type=str,
+        default=None,
+        help="Path to checkpoint for --eval_only.",
+    )
+    parser.add_argument(
         "--output_dir",
         type=str,
         default="checkpoints",
@@ -377,6 +389,42 @@ def get_grad_scaler(enabled: bool):
         except TypeError:
             return torch.amp.GradScaler(enabled=enabled)
     return torch.cuda.amp.GradScaler(enabled=enabled)
+
+
+def apply_checkpoint_args(args: argparse.Namespace, ckpt_args: dict) -> None:
+    if not ckpt_args:
+        return
+    override_fields = [
+        "representation",
+        "backbone",
+        "use_cache",
+        "image_size",
+        "sample_rate",
+        "fixed_duration",
+        "normalization",
+    ]
+    for field in override_fields:
+        if field not in ckpt_args:
+            continue
+        ckpt_value = ckpt_args[field]
+        current_value = getattr(args, field, None)
+        if current_value != ckpt_value:
+            print(
+                f"Eval-only: overriding --{field}={current_value} "
+                f"with checkpoint value {ckpt_value}"
+            )
+        setattr(args, field, ckpt_value)
+
+
+def blank_metrics() -> dict:
+    return {
+        "f1_pos": float("nan"),
+        "accuracy": float("nan"),
+        "sensitivity": float("nan"),
+        "specificity": float("nan"),
+        "auroc": float("nan"),
+        "auprc": float("nan"),
+    }
 
 
 def load_tf_stats(
@@ -886,6 +934,7 @@ def save_run_outputs(
         "timestamp": payload["timestamp"],
         "representation": args.representation,
         "backbone": args.backbone,
+        "eval_only": args.eval_only,
         "use_cache": args.use_cache,
         "device_filter": ",".join(args.device_filter) if args.device_filter else "",
         "train_device_filter": ",".join(args.train_device_filter) if args.train_device_filter else "",
@@ -949,6 +998,17 @@ def save_run_outputs(
 # --------------------------------------------------------------------------- #
 def main():
     args = parse_args()
+
+    checkpoint = None
+    if args.eval_only:
+        if not args.checkpoint_path:
+            raise ValueError("--checkpoint_path is required with --eval_only")
+        if not os.path.isfile(args.checkpoint_path):
+            raise FileNotFoundError(
+                f"--checkpoint_path not found: {args.checkpoint_path}"
+            )
+        checkpoint = torch.load(args.checkpoint_path, map_location="cpu")
+        apply_checkpoint_args(args, checkpoint.get("args", {}))
     set_seed(args.seed, deterministic=args.deterministic)
 
     device = get_device()
@@ -985,7 +1045,13 @@ def main():
 
     validate_input_paths(args)
 
-    run_name = args.run_name or f"{args.backbone}_{args.representation}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+    if args.run_name:
+        run_name = args.run_name
+    elif args.eval_only:
+        ckpt_tag = os.path.splitext(os.path.basename(args.checkpoint_path))[0]
+        run_name = f"eval_{ckpt_tag}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+    else:
+        run_name = f"{args.backbone}_{args.representation}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
     args.run_name = run_name
     run_dir = os.path.join(args.results_dir, run_name)
     summary_path = os.path.join(args.results_dir, "summary.csv")
@@ -1064,6 +1130,113 @@ def main():
 
     model = create_model(backbone=args.backbone, pretrained=True, num_classes=1)
     model.to(device)
+
+    if args.eval_only:
+        if args.tune_threshold:
+            print(
+                "Warning: --tune_threshold ignored in eval_only; "
+                "using checkpoint threshold."
+            )
+        if args.auto_pos_weight or args.pos_weight is not None:
+            print("Note: class weighting flags are ignored in eval_only.")
+
+        if checkpoint is None:
+            checkpoint = torch.load(args.checkpoint_path, map_location=device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        tuned_threshold = checkpoint.get("best_threshold", args.eval_threshold)
+
+        if args.save_predictions:
+            val_metrics, val_logits, val_labels, val_meta = evaluate(
+                model,
+                val_loader,
+                device,
+                threshold=tuned_threshold,
+                use_amp=use_amp,
+                device_type=amp_device_type,
+                return_arrays=True,
+            )
+            save_predictions_csv(
+                os.path.join(run_dir, "predictions_val.csv"),
+                val_logits,
+                val_labels,
+                val_meta,
+                args,
+                split="val",
+                threshold=tuned_threshold,
+            )
+
+            test_metrics, test_logits, test_labels, test_meta = evaluate(
+                model,
+                test_loader,
+                device,
+                threshold=tuned_threshold,
+                use_amp=use_amp,
+                device_type=amp_device_type,
+                return_arrays=True,
+            )
+            save_predictions_csv(
+                os.path.join(run_dir, "predictions_test.csv"),
+                test_logits,
+                test_labels,
+                test_meta,
+                args,
+                split="test",
+                threshold=tuned_threshold,
+            )
+        else:
+            val_metrics = evaluate(
+                model,
+                val_loader,
+                device,
+                threshold=tuned_threshold,
+                use_amp=use_amp,
+                device_type=amp_device_type,
+                return_arrays=False,
+            )
+            test_metrics = evaluate(
+                model,
+                test_loader,
+                device,
+                threshold=tuned_threshold,
+                use_amp=use_amp,
+                device_type=amp_device_type,
+                return_arrays=False,
+            )
+
+        test_metrics_by_device = {}
+        if args.per_device_eval:
+            test_metrics_by_device = evaluate_by_device(
+                model=model,
+                test_ds=test_ds,
+                device=device,
+                threshold=tuned_threshold,
+                use_amp=use_amp,
+                device_type=amp_device_type,
+                batch_size=args.batch_size,
+                num_workers=args.num_workers,
+                pin_memory=use_pin_memory,
+            )
+            for device_name, metrics in test_metrics_by_device.items():
+                print(f"Test metrics [{device_name}]:", format_metrics(metrics))
+
+        print(f"Val metrics (threshold={tuned_threshold:.3f}):", format_metrics(val_metrics))
+        print(f"Test metrics (threshold={tuned_threshold:.3f}):", format_metrics(test_metrics))
+
+        save_run_outputs(
+            run_dir=run_dir,
+            summary_path=summary_path,
+            run_name=run_name,
+            args=args,
+            tuned_threshold=tuned_threshold,
+            val_metrics=val_metrics if val_metrics else blank_metrics(),
+            test_metrics=test_metrics,
+            test_metrics_by_device=test_metrics_by_device,
+            ckpt_path=args.checkpoint_path,
+            history_rows=[],
+        )
+        print(f"Saved eval-only artifacts to {run_dir}")
+        print(f"Summary table updated at {summary_path}")
+        return
 
     pos_weight_value = args.pos_weight
     if args.auto_pos_weight:

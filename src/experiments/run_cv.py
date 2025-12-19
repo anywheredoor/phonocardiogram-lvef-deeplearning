@@ -13,7 +13,7 @@ import pandas as pd
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run CV training sweeps.")
+    parser = argparse.ArgumentParser(description="Run CV training jobs.")
     parser.add_argument(
         "--cv_index",
         type=str,

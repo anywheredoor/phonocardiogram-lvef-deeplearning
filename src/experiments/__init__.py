@@ -1,3 +1,3 @@
 """
-Experiment runners (sweeps, cross-validation).
+Experiment runners (cross-validation).
 """
