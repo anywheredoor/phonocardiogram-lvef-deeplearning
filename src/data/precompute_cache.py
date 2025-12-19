@@ -40,10 +40,29 @@ def parse_args():
         help="Path to TF stats JSON (default: tf_stats.json)",
     )
     parser.add_argument(
+        "--normalization",
+        type=str,
+        default="global",
+        choices=["global", "per_device", "none"],
+        help="Normalization strategy to apply before caching.",
+    )
+    parser.add_argument(
         "--image_size",
         type=int,
         default=224,
         help="Image size (H=W) used in PCGDataset (default: 224)",
+    )
+    parser.add_argument(
+        "--sample_rate",
+        type=int,
+        default=2000,
+        help="Target sample rate used in PCGDataset (default: 2000)",
+    )
+    parser.add_argument(
+        "--fixed_duration",
+        type=float,
+        default=4.0,
+        help="Fixed duration in seconds used in PCGDataset (default: 4.0)",
     )
     parser.add_argument(
         "--cache_root",
@@ -85,6 +104,8 @@ def precompute_for_split(
     mean,
     std,
     image_size,
+    sample_rate,
+    fixed_duration,
     cache_root,
     device_filter=None,
     position_filter=None,
@@ -105,6 +126,8 @@ def precompute_for_split(
         mean=mean,
         std=std,
         image_size=image_size,
+        sample_rate=sample_rate,
+        fixed_duration=fixed_duration,
         device_filter=device_filter,
         position_filter=position_filter,
     )
@@ -133,7 +156,7 @@ def precompute_for_split(
 
     out_csv = os.path.join(
         os.path.dirname(csv_path),
-        f"cached_{base}",  # e.g. cached_metadata_train.csv
+        f"cached_{representation}_{base}",  # e.g. cached_mfcc_metadata_train.csv
     )
     df.to_csv(out_csv, index=False)
 
@@ -144,21 +167,38 @@ def precompute_for_split(
 def main():
     args = parse_args()
 
-    # Load TF stats
-    with open(args.tf_stats_json, "r") as f:
-        stats = json.load(f)
+    mean = std = None
+    if args.normalization != "none":
+        with open(args.tf_stats_json, "r") as f:
+            stats = json.load(f)
 
-    if args.representation not in stats:
-        raise ValueError(
-            f"Representation '{args.representation}' not found in {args.tf_stats_json}. "
-            f"Available: {list(stats.keys())}"
-        )
+        if args.representation not in stats:
+            raise ValueError(
+                f"Representation '{args.representation}' not found in {args.tf_stats_json}. "
+                f"Available: {list(stats.keys())}"
+            )
 
-    rep_stats = stats[args.representation]
-    mean = rep_stats["mean"]
-    std = rep_stats["std"]
-
-    print(f"Using stats for {args.representation}: mean={mean:.6f}, std={std:.6f}")
+        rep_stats = stats[args.representation]
+        if args.normalization == "global":
+            mean = rep_stats["mean"]
+            std = rep_stats["std"]
+            print(f"Using global stats for {args.representation}: mean={mean:.6f}, std={std:.6f}")
+        elif args.normalization == "per_device":
+            per_device = rep_stats.get("per_device")
+            if per_device is None:
+                raise ValueError(
+                    f"No per_device stats found for {args.representation} in {args.tf_stats_json}. "
+                    "Recompute stats with --per_device."
+                )
+            mean = {"__global__": rep_stats["mean"]}
+            std = {"__global__": rep_stats["std"]}
+            for device, vals in per_device.items():
+                mean[device] = vals["mean"]
+                std[device] = vals["std"]
+            print(
+                f"Using per-device stats for {args.representation} "
+                f"(devices={list(per_device.keys())})"
+            )
 
     for csv_path in args.splits:
         if not os.path.exists(csv_path):
@@ -170,6 +210,8 @@ def main():
             mean=mean,
             std=std,
             image_size=args.image_size,
+            sample_rate=args.sample_rate,
+            fixed_duration=args.fixed_duration,
             cache_root=args.cache_root,
             device_filter=args.device_filter,
             position_filter=args.position_filter,

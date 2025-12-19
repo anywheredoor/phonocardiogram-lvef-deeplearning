@@ -37,7 +37,8 @@ import pandas as pd
 #
 # If your naming convention is different, adjust the regex below.
 FILENAME_RE = re.compile(
-    r'^(?P<device_code>[A-Za-z])Data(?P<patient_id>\d+)(?P<position>[A-Za-z])\.wav$'
+    r'^(?P<device_code>[A-Za-z])Data(?P<patient_id>\d+)(?P<position>[A-Za-z])\.wav$',
+    flags=re.IGNORECASE,
 )
 
 # Map one-letter device codes to human-readable device names.

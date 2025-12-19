@@ -7,6 +7,7 @@ records a single global mean and std per representation. These stats are used
 for z-score normalisation during training and during cache precomputation.
 Use --device_filter / --position_filter to restrict the computation to a
 subset of devices or auscultation positions.
+Use --per_device to also compute per-device stats.
 
 Run from repo root, e.g.:
     python -m src.data.compute_stats --representations mfcc gammatone
@@ -15,6 +16,7 @@ Run from repo root, e.g.:
 import argparse
 import json
 
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -92,6 +94,11 @@ def parse_args():
         default=None,
         help="Optional list of positions to include when computing stats.",
     )
+    parser.add_argument(
+        "--per_device",
+        action="store_true",
+        help="Also compute per-device mean/std from the training split.",
+    )
     return parser.parse_args()
 
 
@@ -122,6 +129,7 @@ def compute_mean_std_for_rep(
         std=None,
         device_filter=device_filter,
         position_filter=position_filter,
+        clamp=False,
     )
 
     loader = DataLoader(
@@ -140,7 +148,7 @@ def compute_mean_std_for_rep(
         # imgs: [B, 3, H, W]
         imgs = imgs.to(torch.float32)
         # Flatten all dimensions except batch
-        imgs = imgs.view(imgs.size(0), -1)  # [B, C*H*W]
+        imgs = imgs.reshape(imgs.size(0), -1)  # [B, C*H*W]
         sum_ += imgs.sum().item()
         sum_sq += (imgs ** 2).sum().item()
         n_pixels += imgs.numel()
@@ -157,6 +165,14 @@ def main():
     args = parse_args()
 
     stats = {}
+    df_devices = None
+    if args.per_device:
+        df_devices = pd.read_csv(args.train_csv)
+        if args.device_filter is not None:
+            df_devices = df_devices[df_devices["device"].isin(args.device_filter)]
+        if args.position_filter is not None and "position" in df_devices.columns:
+            df_devices = df_devices[df_devices["position"].isin(args.position_filter)]
+        df_devices = df_devices.reset_index(drop=True)
 
     for rep in args.representations:
         if rep not in ("mfcc", "gammatone"):
@@ -175,6 +191,27 @@ def main():
             position_filter=args.position_filter,
         )
         stats[rep] = {"mean": mean, "std": std}
+
+        if args.per_device:
+            if df_devices is None or len(df_devices) == 0:
+                print("No devices available for per-device stats; skipping.")
+                continue
+            stats[rep]["per_device"] = {}
+            devices = sorted(df_devices["device"].unique().tolist())
+            for device in devices:
+                print(f"\n--- Per-device stats: {rep} / {device} ---")
+                d_mean, d_std = compute_mean_std_for_rep(
+                    train_csv=args.train_csv,
+                    representation=rep,
+                    sample_rate=args.sample_rate,
+                    fixed_duration=args.fixed_duration,
+                    image_size=args.image_size,
+                    batch_size=args.batch_size,
+                    num_workers=args.num_workers,
+                    device_filter=[device],
+                    position_filter=args.position_filter,
+                )
+                stats[rep]["per_device"][device] = {"mean": d_mean, "std": d_std}
 
     if not stats:
         print("No stats computed. Nothing to save.")

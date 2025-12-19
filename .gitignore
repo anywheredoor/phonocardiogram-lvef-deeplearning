@@ -23,6 +23,7 @@ venv/
 /checkpoints/
 /checkpoints_cpu/
 /results/
+/reports/
 
 # Model weights / tensors
 *.pth

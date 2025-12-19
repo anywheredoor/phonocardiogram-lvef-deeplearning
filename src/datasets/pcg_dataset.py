@@ -15,7 +15,7 @@ CachedPCGDataset
 """
 
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -56,10 +56,11 @@ class PCGDataset(Dataset):
         sample_rate: int = 2000,
         fixed_duration: float = 4.0,  # seconds
         image_size: int = 224,
-        mean: Optional[float] = None,  # dataset-level mean (computed on train)
-        std: Optional[float] = None,  # dataset-level std (computed on train)
+        mean: Optional[Union[float, Dict[str, float]]] = None,
+        std: Optional[Union[float, Dict[str, float]]] = None,
         device_filter: Optional[List[str]] = None,  # e.g. ["iphone"]
         position_filter: Optional[List[str]] = None,  # e.g. ["M"]
+        clamp: bool = True,
     ):
         """
         Args:
@@ -68,12 +69,14 @@ class PCGDataset(Dataset):
             sample_rate: Target sampling rate in Hz.
             fixed_duration: Waveform duration (seconds) after cropping/padding.
             image_size: Output H=W size for the spectrogram image.
-            mean, std: Optional z-score normalisation parameters
-                (should be computed from training set only).
+            mean, std: Optional z-score normalisation parameters.
+                Can be scalars (global) or dicts keyed by device, with an
+                optional "__global__" fallback (computed on training set only).
             device_filter: Optional list of device names to keep
                 (values from metadata 'device' column).
             position_filter: Optional list of positions to keep
                 (values "A", "P", "M", "T").
+            clamp: Whether to clamp the final image values to a fixed range.
         """
         super().__init__()
 
@@ -90,6 +93,7 @@ class PCGDataset(Dataset):
 
         self.mean = mean
         self.std = std
+        self.clamp = clamp
 
         # ---------------------------------------------------------------------
         # Load metadata
@@ -250,7 +254,7 @@ class PCGDataset(Dataset):
 
         return spec
 
-    def _spec_to_image(self, spec: torch.Tensor) -> torch.Tensor:
+    def _spec_to_image(self, spec: torch.Tensor, device: str) -> torch.Tensor:
         """
         Convert [freq, time] spec to (3, image_size, image_size) tensor.
 
@@ -276,12 +280,23 @@ class PCGDataset(Dataset):
         # Make sure there are no NaNs or Infs in the image
         img = torch.nan_to_num(img, nan=0.0, posinf=0.0, neginf=0.0)
 
-        # z-score normalisation using dataset-level stats (scalar)
-        if (self.mean is not None) and (self.std is not None):
-            img = (img - self.mean) / (self.std + 1e-8)
+        mean = self.mean
+        std = self.std
+        if isinstance(mean, dict) or isinstance(std, dict):
+            mean_val = mean.get(device) if isinstance(mean, dict) else None
+            std_val = std.get(device) if isinstance(std, dict) else None
+            if mean_val is None and isinstance(mean, dict):
+                mean_val = mean.get("__global__")
+            if std_val is None and isinstance(std, dict):
+                std_val = std.get("__global__")
+            if (mean_val is not None) and (std_val is not None):
+                img = (img - mean_val) / (std_val + 1e-8)
+        elif (mean is not None) and (std is not None):
+            img = (img - mean) / (std + 1e-8)
 
-        # Clamp after normalisation: keep values in a moderate range
-        img = torch.clamp(img, min=-10.0, max=10.0)
+        if self.clamp:
+            # Clamp after normalisation: keep values in a moderate range
+            img = torch.clamp(img, min=-10.0, max=10.0)
 
         return img
 
@@ -304,7 +319,7 @@ class PCGDataset(Dataset):
         waveform = self._fix_length(waveform)
 
         spec = self._to_tf_representation(waveform)
-        img = self._spec_to_image(spec)
+        img = self._spec_to_image(spec, device=device)
 
         meta = {
             "patient_id": patient_id,
@@ -312,6 +327,10 @@ class PCGDataset(Dataset):
             "ef": ef,
             "path": path,
         }
+        if "position" in row:
+            meta["position"] = row["position"]
+        if "filename" in row:
+            meta["filename"] = row["filename"]
 
         return img, label, meta
 
@@ -368,5 +387,9 @@ class CachedPCGDataset(Dataset):
             "ef": ef,
             "path": row["path"],
         }
+        if "position" in row:
+            meta["position"] = row["position"]
+        if "filename" in row:
+            meta["filename"] = row["filename"]
 
         return img, label, meta

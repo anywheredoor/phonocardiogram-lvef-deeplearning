@@ -117,6 +117,34 @@ def make_patient_table(df_meta: pd.DataFrame) -> pd.DataFrame:
     return df_pat
 
 
+def _safe_train_test_split(df: pd.DataFrame, test_size: float, seed: int, stage: str):
+    labels = df["label"]
+    stratify = None
+    if labels.nunique() > 1 and labels.value_counts().min() >= 2:
+        stratify = labels
+    try:
+        return train_test_split(
+            df,
+            test_size=test_size,
+            stratify=stratify,
+            random_state=seed,
+            shuffle=True,
+        )
+    except ValueError as exc:
+        print(
+            f"Warning: stratified split failed for {stage} ({exc}); "
+            "falling back to unstratified split.",
+            file=sys.stderr,
+        )
+        return train_test_split(
+            df,
+            test_size=test_size,
+            stratify=None,
+            random_state=seed,
+            shuffle=True,
+        )
+
+
 def stratified_patient_split(
     df_pat: pd.DataFrame, test_size: float, val_size: float, seed: int
 ):
@@ -135,15 +163,9 @@ def stratified_patient_split(
             "Require: test_size > 0, val_size >= 0, and test_size + val_size < 1.0"
         )
 
-    labels = df_pat["label"]
-
     # First: train_val vs test
-    df_train_val, df_test = train_test_split(
-        df_pat,
-        test_size=test_size,
-        stratify=labels,
-        random_state=seed,
-        shuffle=True,
+    df_train_val, df_test = _safe_train_test_split(
+        df_pat, test_size=test_size, seed=seed, stage="train/test"
     )
 
     # Now split train_val into train vs val.
@@ -151,12 +173,11 @@ def stratified_patient_split(
     rel_val_size = val_size / (1.0 - test_size)
 
     if rel_val_size > 0:
-        df_train, df_val = train_test_split(
+        df_train, df_val = _safe_train_test_split(
             df_train_val,
             test_size=rel_val_size,
-            stratify=df_train_val["label"],
-            random_state=seed,
-            shuffle=True,
+            seed=seed,
+            stage="train/val",
         )
     else:
         df_train = df_train_val
