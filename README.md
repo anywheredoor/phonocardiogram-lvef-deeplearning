@@ -1,6 +1,6 @@
 # Deep-Learning Analysis of Smartphone and Electronic-Stethoscope Phonocardiograms for Detection of Reduced Left Ventricular Ejection Fraction
 
-Final Year Project (Bachelor of Biomedical Sciences, The University of Hong Kong (HKU)).
+Final Year Project, Bachelor of Biomedical Sciences, Li Ka Shing Faculty of Medicine, The University of Hong Kong (HKU).
 
 ## Overview
 - Binary classification: LVEF <= 40% (label 1) vs > 40% (label 0).
