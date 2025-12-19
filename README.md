@@ -14,7 +14,7 @@ Final Year Project, Bachelor of Biomedical Sciences, Li Ka Shing Faculty of Medi
 - `src/datasets`: on-the-fly and cached datasets.
 - `src/models`: backbone factory.
 - `src/training`: training entry point.
-- `src/experiments`: optional CV runner.
+- `src/experiments`: CV runner.
 - `colab_pipeline.ipynb`: end-to-end Colab notebook.
 
 ## Requirements
@@ -28,7 +28,7 @@ If you need GPU support, install the appropriate PyTorch build per the official 
 - `heart_sounds/` with per-patient subfolders containing WAV files.
 - `lvef.csv` with columns `patient_id` and `ef`.
 - Filename parsing is defined in `src/data/build_metadata.py` (`FILENAME_RE`, `DEVICE_MAP`); update if your naming differs.
-Sensitive data (raw audio, labels) and derived artifacts are gitignored by default for privacy.
+- Sensitive data (raw audio, labels) and derived artifacts are gitignored by default for privacy.
 
 ## End-to-End Workflow
 ```bash
@@ -59,10 +59,6 @@ python -m src.data.compute_stats \
 # 5) Precompute cached tensors (optional but faster)
 python -m src.data.precompute_cache --representation mfcc
 python -m src.data.precompute_cache --representation gammatone
-
-# Cached CSVs are named: splits/cached_<representation>_metadata_{train,val,test}.csv
-#
-# If you skip caching, remove --use_cache in steps 7–8 and use splits/metadata_*.csv.
 
 # 6) Run 5-fold CV (default evaluation path)
 python -m src.experiments.run_cv \
@@ -102,6 +98,9 @@ python -m src.training.train \
   --results_dir results
 ```
 
+Cached CSVs are named: `splits/cached_<representation>_metadata_{train,val,test}.csv`.  
+If you skip caching, remove `--use_cache` in steps 7–8 and use `splits/metadata_*.csv`.
+
 ## Training Notes
 - `--use_cache` ignores `--sample_rate`, `--fixed_duration`, `--image_size`, and `--normalization`; ensure cached tensors were built with the intended settings.
 - `--normalization per_device` requires `compute_stats --per_device`.
@@ -125,11 +124,11 @@ python -m src.training.train \
   --test_csv splits/metadata_test.csv \
   --representation mfcc \
   --backbone mobilenetv2 \
-  --use_cache \
   --auto_pos_weight \
   --tune_threshold \
   --per_device_eval
 ```
+For cached tensors, switch to `splits/cached_<representation>_metadata_{train,val,test}.csv` and add `--use_cache`.
 
 Cross-device evaluation using the best within-device checkpoint (no retraining):
 ```bash
