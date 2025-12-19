@@ -6,7 +6,7 @@ Final Year Project, Bachelor of Biomedical Sciences, Li Ka Shing Faculty of Medi
 - Binary classification: LVEF <= 40% (label 1) vs > 40% (label 0).
 - Inputs: PCG recordings from smartphones (iPhone, Android) and electronic stethoscopes.
 - Representations: MFCC and gammatone spectrograms.
-- Backbones: MobileNetV2, MobileNetV3-Large, EfficientNet-B0, EfficientNetV2-S, SwinV2-Tiny, SwinV2-Small (via timm).
+- Backbones: MobileNetV2, MobileNetV3-Large, EfficientNet-B0, EfficientNetV2-S, SwinV2-Tiny, SwinV2-Small.
 - Patient-level splits to avoid leakage; supports within-device, cross-device, and pooled evaluations.
 
 ## Repository Structure
