@@ -37,7 +37,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--run_name_format",
         type=str,
-        default="cv_r{repeat:02d}_f{fold:02d}_{backbone}_{representation}",
+        default="cv_r{repeat:02d}_f{fold:02d}_{backbone}_{representation}_dev{device}_pos{position}",
         help="Run name format string.",
     )
     parser.add_argument(
@@ -169,6 +169,8 @@ def main() -> None:
     sample_rate = _find_arg_value(extra_args, "--sample_rate", "2000")
     fixed_duration = _find_arg_value(extra_args, "--fixed_duration", "4.0")
     image_size = _find_arg_value(extra_args, "--image_size", "224")
+    device_slug = _slug_list(device_filter)
+    position_slug = _slug_list(position_filter)
 
     run_count = 0
     for _, row in df.iterrows():
@@ -179,7 +181,12 @@ def main() -> None:
         test_csv = row["test_csv"]
 
         run_name = args.run_name_format.format(
-            repeat=repeat, fold=fold, backbone=backbone, representation=representation
+            repeat=repeat,
+            fold=fold,
+            backbone=backbone,
+            representation=representation,
+            device=device_slug,
+            position=position_slug,
         )
 
         metrics_path = os.path.join(args.results_dir, run_name, "metrics.json")
@@ -211,8 +218,6 @@ def main() -> None:
                 sys.exit(1)
         if compute_stats:
             fold_dir = os.path.dirname(train_csv)
-            device_slug = _slug_list(device_filter)
-            position_slug = _slug_list(position_filter)
             stats_tag = (
                 f"{representation}_{normalization}"
                 f"_dev{device_slug}_pos{position_slug}"

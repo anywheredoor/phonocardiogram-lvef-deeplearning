@@ -167,7 +167,7 @@ def main():
     stats = {}
     df_devices = None
     if args.per_device:
-        df_devices = pd.read_csv(args.train_csv)
+        df_devices = pd.read_csv(args.train_csv, dtype={"patient_id": str})
         if args.device_filter is not None:
             df_devices = df_devices[df_devices["device"].isin(args.device_filter)]
         if args.position_filter is not None and "position" in df_devices.columns:

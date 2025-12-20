@@ -27,6 +27,7 @@ If you need GPU support, install the appropriate PyTorch build per the official 
 ## Data Expectations
 - `heart_sounds/` with per-patient subfolders containing WAV files.
 - `lvef.csv` with columns `patient_id` and `ef`.
+- `patient_id` is treated as a string (leading zeros are preserved).
 - Filename parsing is defined in `src/data/build_metadata.py` (`FILENAME_RE`, `DEVICE_MAP`); update if your naming differs.
 - Sensitive data (raw audio, labels) and derived artifacts are gitignored by default for privacy.
 

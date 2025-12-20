@@ -80,7 +80,7 @@ def load_lvef_table(lvef_csv: str) -> pd.DataFrame:
         print(f"ERROR: lvef CSV not found at {lvef_csv}", file=sys.stderr)
         sys.exit(1)
 
-    df = pd.read_csv(lvef_csv)
+    df = pd.read_csv(lvef_csv, dtype={"patient_id": str})
 
     required_cols = {"patient_id", "ef"}
     missing = required_cols - set(df.columns)
@@ -159,7 +159,7 @@ def build_metadata(
 
             rows.append(
                 {
-                    "patient_id": int(pid),  # keep as int in output for convenience
+                    "patient_id": str(pid),
                     "ef": float(ef),
                     "label": int(float(ef) <= 40.0),  # 1 if EF <= 40 else 0
                     "device_code": device_code,

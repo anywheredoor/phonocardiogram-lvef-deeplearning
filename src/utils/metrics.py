@@ -18,6 +18,18 @@ from sklearn.metrics import (
 )
 
 
+def sigmoid_probs(x: np.ndarray) -> np.ndarray:
+    """Numerically stable sigmoid to avoid exp overflow warnings."""
+    x = np.asarray(x)
+    pos_mask = x >= 0
+    neg_mask = ~pos_mask
+    out = np.empty_like(x, dtype=np.float64)
+    out[pos_mask] = 1.0 / (1.0 + np.exp(-x[pos_mask]))
+    exp_x = np.exp(x[neg_mask])
+    out[neg_mask] = exp_x / (1.0 + exp_x)
+    return out
+
+
 def compute_binary_metrics(
     logits, labels, threshold: float = 0.5
 ) -> Dict[str, float]:
@@ -27,7 +39,7 @@ def compute_binary_metrics(
     logits = np.asarray(logits)
     labels = np.asarray(labels).astype(int)
 
-    probs = 1.0 / (1.0 + np.exp(-logits))
+    probs = sigmoid_probs(logits)
     preds = (probs >= threshold).astype(int)
 
     # F1 for the positive class (label=1)

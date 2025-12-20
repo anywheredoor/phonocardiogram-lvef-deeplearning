@@ -132,7 +132,7 @@ def main() -> None:
         print(f"ERROR: metadata CSV not found at {args.metadata_csv}", file=sys.stderr)
         sys.exit(1)
 
-    df = pd.read_csv(args.metadata_csv)
+    df = pd.read_csv(args.metadata_csv, dtype={"patient_id": str})
     required_cols = {"patient_id", "ef", "label", "device", "path"}
     missing = required_cols - set(df.columns)
     if missing:

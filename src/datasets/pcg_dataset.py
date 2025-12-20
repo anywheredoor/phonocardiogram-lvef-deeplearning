@@ -98,7 +98,7 @@ class PCGDataset(Dataset):
         # ---------------------------------------------------------------------
         # Load metadata
         # ---------------------------------------------------------------------
-        df = pd.read_csv(csv_path)
+        df = pd.read_csv(csv_path, dtype={"patient_id": str})
 
         required_cols = {"path", "label", "patient_id", "device", "ef"}
         missing = required_cols - set(df.columns)
@@ -307,7 +307,7 @@ class PCGDataset(Dataset):
         row = self.df.iloc[idx]
 
         path = row["path"]
-        patient_id = int(row["patient_id"])
+        patient_id = str(row["patient_id"])
         device = row["device"]
         ef = float(row["ef"])
 
@@ -353,7 +353,7 @@ class CachedPCGDataset(Dataset):
     ):
         super().__init__()
         self.csv_path = csv_path
-        self.df = pd.read_csv(csv_path)
+        self.df = pd.read_csv(csv_path, dtype={"patient_id": str})
 
         required_cols = ["patient_id", "device", "ef", "path", "cache_path"]
         for c in required_cols:
@@ -382,7 +382,7 @@ class CachedPCGDataset(Dataset):
         label = ef_to_label(ef)
 
         meta = {
-            "patient_id": int(row["patient_id"]),
+            "patient_id": str(row["patient_id"]),
             "device": row["device"],
             "ef": ef,
             "path": row["path"],

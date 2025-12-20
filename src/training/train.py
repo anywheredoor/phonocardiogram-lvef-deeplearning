@@ -31,7 +31,7 @@ from tqdm import tqdm
 
 from src.datasets.pcg_dataset import CachedPCGDataset, PCGDataset, ef_to_label
 from src.models.models import BACKBONE_CONFIGS, create_model
-from src.utils.metrics import compute_binary_metrics, format_metrics, tune_threshold
+from src.utils.metrics import compute_binary_metrics, format_metrics, sigmoid_probs, tune_threshold
 
 
 # --------------------------------------------------------------------------- #
@@ -598,7 +598,7 @@ def save_predictions_csv(
     split: str,
     threshold: float,
 ):
-    probs = 1.0 / (1.0 + np.exp(-logits))
+    probs = sigmoid_probs(logits)
     preds = (probs >= threshold).astype(int)
     rows = []
     for i in range(len(labels)):

@@ -75,7 +75,7 @@ def load_metadata(metadata_csv: str) -> pd.DataFrame:
         print(f"ERROR: metadata CSV not found at {metadata_csv}", file=sys.stderr)
         sys.exit(1)
 
-    df = pd.read_csv(metadata_csv)
+    df = pd.read_csv(metadata_csv, dtype={"patient_id": str})
 
     required_cols = {"patient_id", "ef", "label"}
     missing = required_cols - set(df.columns)
@@ -85,6 +85,8 @@ def load_metadata(metadata_csv: str) -> pd.DataFrame:
             file=sys.stderr,
         )
         sys.exit(1)
+
+    df["patient_id"] = df["patient_id"].astype(str)
 
     return df
 
