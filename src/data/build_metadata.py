@@ -101,6 +101,25 @@ def load_lvef_table(lvef_csv: str) -> pd.DataFrame:
     # Ensure patient_id is string so it matches directory names
     df["patient_id"] = df["patient_id"].astype(str)
 
+    dup_mask = df.duplicated(subset=["patient_id"], keep=False)
+    if dup_mask.any():
+        dup_df = df.loc[dup_mask, ["patient_id", "ef"]]
+        dup_counts = dup_df.groupby("patient_id")["ef"].nunique()
+        conflicts = dup_counts[dup_counts > 1]
+        if len(conflicts) > 0:
+            sample_ids = ", ".join(list(conflicts.index.astype(str)[:5]))
+            print(
+                "ERROR: lvef CSV has conflicting EF values for patient_id(s): "
+                f"{sample_ids}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(
+            "Warning: duplicate patient_id rows with identical EF detected; "
+            "keeping the first occurrence."
+        )
+        df = df.drop_duplicates(subset=["patient_id"], keep="first").copy()
+
     return df
 
 
