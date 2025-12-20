@@ -56,9 +56,10 @@ python -m src.data.compute_stats \
   --representations mfcc gammatone
 # Optional: add --per_device if you plan to use --normalization per_device
 
-# 5) Precompute cached tensors (optional but faster)
+# 5) Precompute cached tensors (optional but faster; requires tf_stats.json)
 python -m src.data.precompute_cache --representation mfcc
 python -m src.data.precompute_cache --representation gammatone
+# Optional: add --normalization per_device if you computed per-device stats
 
 # 6) Run 5-fold CV (default evaluation path)
 python -m src.experiments.run_cv \
@@ -70,6 +71,8 @@ python -m src.experiments.run_cv \
   --backbone mobilenetv2 \
   --auto_pos_weight \
   --tune_threshold
+# Optional: add --train_device_filter/--val_device_filter/--test_device_filter
+# (set all three to the same device) for within-device CV.
 
 # 7) Train a final within-device model (single run)
 python -m src.training.train \
@@ -78,6 +81,9 @@ python -m src.training.train \
   --test_csv splits/cached_mfcc_metadata_test.csv \
   --representation mfcc \
   --backbone mobilenetv2 \
+  --train_device_filter iphone \
+  --val_device_filter iphone \
+  --test_device_filter iphone \
   --use_cache \
   --auto_pos_weight \
   --tune_threshold \
@@ -92,8 +98,11 @@ python -m src.training.train \
   --train_csv splits/cached_mfcc_metadata_train.csv \
   --val_csv splits/cached_mfcc_metadata_val.csv \
   --test_csv splits/cached_mfcc_metadata_test.csv \
-  --test_device_filter iphone digital_stethoscope \
+  --train_device_filter iphone \
+  --val_device_filter iphone \
+  --test_device_filter android_phone digital_stethoscope \
   --per_device_eval \
+  --use_cache \
   --save_predictions \
   --results_dir results
 ```
@@ -124,10 +133,14 @@ python -m src.training.train \
   --test_csv splits/metadata_test.csv \
   --representation mfcc \
   --backbone mobilenetv2 \
+  --train_device_filter iphone \
+  --val_device_filter iphone \
+  --test_device_filter iphone \
   --auto_pos_weight \
   --tune_threshold \
   --per_device_eval
 ```
+Replace `iphone` with `android_phone` or `digital_stethoscope` as needed.
 For cached tensors, switch to `splits/cached_<representation>_metadata_{train,val,test}.csv` and add `--use_cache`.
 
 Cross-device evaluation using the best within-device checkpoint (no retraining):
