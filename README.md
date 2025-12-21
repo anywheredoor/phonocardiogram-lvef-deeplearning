@@ -28,10 +28,10 @@ Expected structure:
 - Filename parsing is defined in `src/data/build_metadata.py` (`FILENAME_RE`, `DEVICE_MAP`); update if your naming differs.
 - Sensitive data (raw audio, labels) and derived artifacts are gitignored by default for privacy.
 
-## Preprocessing (Audio to Images)
+## Preprocessing
 Audio is resampled to 2000 Hz, band-pass filtered to 20-800 Hz, then center-cropped or zero-padded to 4.0 s. Each waveform is converted to MFCC or gammatone, resized to the model input size, repeated to 3 channels, and normalized using training-split statistics (global or per-device). These steps are identical across devices to avoid leakage.
 
-## Workflow (Narrative)
+## Workflow
 1) Build `metadata.csv`, then create patient-level splits and 5-fold CV splits to avoid leakage. 2) Run within-device CV for model selection (F1_pos as the primary metric). 3) Train one final model per device using the selected config, then evaluate cross-device performance using the saved checkpoints (no retraining). 4) Train one pooled model using the best config from within-device results and report overall + per-device metrics.
 
 ## Command Reference
