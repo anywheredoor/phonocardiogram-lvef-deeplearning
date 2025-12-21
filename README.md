@@ -124,7 +124,7 @@ If you skip caching, remove `--use_cache` in steps 7–8 and use `splits/metadat
 - `run_cv` computes TF stats per fold by default; disable with `--skip_compute_stats`.
 - `run_cv --use_cache` requires cached CSVs per fold; otherwise keep CV on-the-fly.
 - Save predictions only for final selected models to keep output size manageable.
-- Input size per backbone: use 224x224 for MobileNet/EfficientNet, and 256x256 for SwinV2-Tiny/Small (timm pretrained configs expect 256).
+- Input size per backbone: use 224x224 for MobileNet and EfficientNet-B0, 256x256 for SwinV2-Tiny/Small, and 384x384 for EfficientNetV2-S (timm pretrained configs expect these sizes, which usually yields more stable transfer performance).
 
 ## Experiments
 Run within-device experiments manually (repeat per device/representation/backbone):
