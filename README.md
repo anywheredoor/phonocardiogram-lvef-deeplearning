@@ -2,6 +2,21 @@
 
 Final Year Project, Bachelor of Biomedical Sciences, Li Ka Shing Faculty of Medicine, The University of Hong Kong.
 
+## Table of Contents
+- [Project Summary](#project-summary)
+- [Repository Structure](#repository-structure)
+- [Requirements](#requirements)
+- [Data and Inputs](#data-and-inputs)
+- [Preprocessing](#preprocessing)
+- [Workflow](#workflow)
+- [Command Reference](#command-reference)
+- [Training and Evaluation Notes](#training-and-evaluation-notes)
+- [Default Hyperparameters](#default-hyperparameters)
+- [Study Design (Dissertation Workflow)](#study-design-dissertation-workflow)
+- [QA and SNR Sanity Check (Optional)](#qa-and-snr-sanity-check-optional)
+- [Outputs](#outputs)
+- [Colab](#colab)
+
 ## Project Summary
 This project builds a PCG-based screening model for reduced LVEF (binary classification: EF <= 40% vs > 40%) using recordings from iPhone, Android, and digital stethoscope devices. The core comparisons are (1) MFCC vs gammatone time-frequency representations and (2) lightweight CNNs vs SwinV2 backbones, with emphasis on within-device performance and cross-device generalization.
 
@@ -128,6 +143,25 @@ If you skip caching, remove `--use_cache` and use `splits/metadata_*.csv`.
 - `run_cv` computes TF stats per fold by default; disable with `--skip_compute_stats`.
 - Input size per backbone: 224x224 for MobileNet and EfficientNet-B0, 256x256 for SwinV2-Tiny/Small, and 384x384 for EfficientNetV2-S (matches pretrained configs for more stable transfer).
 - Save predictions only for final selected models to keep output size manageable.
+
+## Default Hyperparameters
+Defaults from `src/training/train.py` (unless overridden in the notebook or CLI):
+- `batch_size`: 32
+- `epochs`: 100
+- `lr`: 1e-4
+- `optimizer`: adamw
+- `weight_decay`: 1e-4
+- `scheduler`: cosine (min_lr 1e-6, warmup_epochs 5)
+- `grad_accum_steps`: 1
+- `eval_threshold`: 0.5
+- `early_stopping_patience`: 15 (min_delta 0.0)
+- `sample_rate`: 2000
+- `fixed_duration`: 4.0 s
+- `image_size`: 224 (overridden for SwinV2/EfficientNetV2-S as documented)
+- `normalization`: global
+- `amp`: off by default (enable with `--amp`)
+- `auto_pos_weight`: off by default (enable with `--auto_pos_weight`)
+- `tune_threshold`: off by default (enable with `--tune_threshold`)
 
 ## Study Design (Dissertation Workflow)
 Within-device model selection runs 3 devices x 2 representations x 6 backbones (36 configs) with 5-fold CV. After selecting the best config per device, train one final checkpoint per device for cross-device evaluation (3 training runs). Cross-device evaluation uses those checkpoints to test on the other devices (6 eval-only runs). A pooled model is trained once using the best within-device config and reported overall and per-device.
