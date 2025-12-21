@@ -15,6 +15,13 @@ import numpy as np
 import pandas as pd
 import soundfile as sf
 
+try:
+    import torch
+    import torchaudio.functional as AF
+    HAVE_TORCHAUDIO = True
+except Exception:
+    HAVE_TORCHAUDIO = False
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -68,6 +75,32 @@ def parse_args() -> argparse.Namespace:
         default=20,
         help="Max number of example paths to include in the report.",
     )
+    parser.add_argument(
+        "--compute_snr",
+        action="store_true",
+        help=(
+            "Compute a simple SNR proxy using band-pass energy vs residual. "
+            "This loads audio and is slower than the default QA."
+        ),
+    )
+    parser.add_argument(
+        "--snr_low_hz",
+        type=float,
+        default=20.0,
+        help="Low cutoff (Hz) for SNR band-pass (default: 20).",
+    )
+    parser.add_argument(
+        "--snr_high_hz",
+        type=float,
+        default=800.0,
+        help="High cutoff (Hz) for SNR band-pass (default: 800).",
+    )
+    parser.add_argument(
+        "--snr_max_seconds",
+        type=float,
+        default=None,
+        help="Optional max duration (sec) to use for SNR per file.",
+    )
     return parser.parse_args()
 
 
@@ -104,6 +137,43 @@ def _df_to_nested_dict(df: Optional[pd.DataFrame]) -> Dict[str, Dict[str, int]]:
     return data
 
 
+def _compute_snr_db(
+    waveform: np.ndarray,
+    sr: int,
+    low_hz: float,
+    high_hz: float,
+    max_seconds: Optional[float],
+) -> Optional[float]:
+    if sr <= 0:
+        return None
+    if waveform.ndim > 1:
+        waveform = waveform[:, 0]
+    if waveform.size == 0:
+        return None
+    if max_seconds is not None and max_seconds > 0:
+        max_len = int(sr * max_seconds)
+        if waveform.size > max_len:
+            start = (waveform.size - max_len) // 2
+            waveform = waveform[start : start + max_len]
+
+    high = min(float(high_hz), float(sr) * 0.45)
+    low = float(low_hz)
+    if high <= low:
+        return None
+
+    wave = torch.from_numpy(waveform.astype("float32")).unsqueeze(0)
+    band = AF.highpass_biquad(wave, sr, cutoff_freq=low, Q=0.707)
+    band = AF.lowpass_biquad(band, sr, cutoff_freq=high, Q=0.707)
+    noise = wave - band
+
+    sig_power = torch.mean(band ** 2).item()
+    noise_power = torch.mean(noise ** 2).item()
+    if noise_power <= 0:
+        return None
+    snr_db = 10.0 * np.log10((sig_power + 1e-12) / (noise_power + 1e-12))
+    return float(snr_db)
+
+
 def _compute_pos_weight_from_csv(csv_path: str):
     if not os.path.isfile(csv_path):
         return None, None, None, f"train_csv not found: {csv_path}"
@@ -130,6 +200,12 @@ def main() -> None:
 
     if not os.path.isfile(args.metadata_csv):
         print(f"ERROR: metadata CSV not found at {args.metadata_csv}", file=sys.stderr)
+        sys.exit(1)
+    if args.compute_snr and not HAVE_TORCHAUDIO:
+        print(
+            "ERROR: --compute_snr requires torch and torchaudio.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     df = pd.read_csv(args.metadata_csv, dtype={"patient_id": str})
@@ -188,6 +264,8 @@ def main() -> None:
     durations: List[float] = []
     sample_rates: List[int] = []
     durations_by_device: Dict[str, List[float]] = {}
+    snr_values: List[float] = []
+    snr_by_device: Dict[str, List[float]] = {}
 
     per_record_rows = []
 
@@ -199,6 +277,8 @@ def main() -> None:
         samplerate = None
         frames = None
         error = ""
+        snr_db = None
+        snr_error = ""
 
         if not exists:
             missing_paths.append(path)
@@ -216,6 +296,22 @@ def main() -> None:
                 unreadable_paths.append(path)
                 error = str(exc)
 
+        if args.compute_snr and exists:
+            try:
+                wave, sr = sf.read(path, dtype="float32")
+                snr_db = _compute_snr_db(
+                    wave,
+                    sr,
+                    args.snr_low_hz,
+                    args.snr_high_hz,
+                    args.snr_max_seconds,
+                )
+                if snr_db is not None:
+                    snr_values.append(snr_db)
+                    snr_by_device.setdefault(device, []).append(snr_db)
+            except Exception as exc:
+                snr_error = str(exc)
+
         if args.output_csv:
             per_record_rows.append(
                 {
@@ -226,6 +322,8 @@ def main() -> None:
                     "sample_rate": samplerate,
                     "frames": frames,
                     "error": error,
+                    "snr_db": snr_db,
+                    "snr_error": snr_error,
                 }
             )
 
@@ -265,6 +363,13 @@ def main() -> None:
         "shorter_than_fixed_duration_count": short_count,
         "shorter_than_fixed_duration_fraction": short_fraction,
         "duplicate_path_count": int(df["path"].duplicated().sum()),
+        "snr_db_summary": _summarize(snr_values),
+        "snr_db_by_device_summary": {
+            device: _summarize(vals) for device, vals in snr_by_device.items()
+        },
+        "snr_low_hz": args.snr_low_hz,
+        "snr_high_hz": args.snr_high_hz,
+        "snr_max_seconds": args.snr_max_seconds,
     }
 
     train_csv = args.train_csv

@@ -125,6 +125,7 @@ If you skip caching, remove `--use_cache` in steps 7–8 and use `splits/metadat
 - `run_cv --use_cache` requires cached CSVs per fold; otherwise keep CV on-the-fly.
 - Save predictions only for final selected models to keep output size manageable.
 - Input size per backbone: use 224x224 for MobileNet and EfficientNet-B0, 256x256 for SwinV2-Tiny/Small, and 384x384 for EfficientNetV2-S (timm pretrained configs expect these sizes, which usually yields more stable transfer performance).
+- Optional QA: run `python -m src.data.qa_report --compute_snr` (use `--max_files` to sample) to summarize recording noise levels without adding denoising.
 
 ## Experiments
 Run within-device experiments manually (repeat per device/representation/backbone):
@@ -190,6 +191,8 @@ python -m src.experiments.run_cv \
 - Add a simple baseline (e.g., logistic regression on MFCC summary stats) to demonstrate the value of deep models.
 - Report uncertainty: mean ± SD across CV folds and, if possible, paired comparisons between representations/backbones.
 - Report operating points: sensitivity/specificity at the tuned threshold and a clinically motivated threshold if applicable.
+  
+SNR sanity check (current dataset): using the QA report SNR proxy (20-800 Hz band-pass energy vs residual), overall mean SNR is ~2.6 dB (median ~4.3 dB). Per device: iPhone ~6.3 dB, digital stethoscope ~4.5 dB, Android ~-3.2 dB. We keep preprocessing minimal (band-pass only) to avoid device-specific denoising bias; this check is reported to justify that choice.
 
 ## Outputs
 - `results/summary.csv`: aggregated metrics per run (and per device when enabled).
