@@ -21,7 +21,7 @@ BACKBONE_CONFIGS: Dict[str, str] = {
     "mobilenetv2": "mobilenetv2_100",
     "mobilenetv3_large": "mobilenetv3_large_100",
     "efficientnet_b0": "efficientnet_b0",
-    "efficientnetv2_s": "efficientnetv2_s",
+    "efficientnetv2_s": "tf_efficientnetv2_s",
     "swinv2_tiny": "swinv2_tiny_window8_256",
     "swinv2_small": "swinv2_small_window8_256",
 }
