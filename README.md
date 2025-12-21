@@ -183,6 +183,13 @@ python -m src.experiments.run_cv \
 - Cross-device evaluation: evaluate each device’s checkpoint on the other two devices (3 sources × 2 targets = 6 eval-only runs; no retraining).
 - Pooled model: train 1 pooled model using the config chosen from within-device results, then report overall and per-device performance.
 
+## Research Notes
+- Avoid leakage: compute normalization stats only on the training split; for cross-device tests, do not use target-device statistics.
+- Pre-register the selection rule: report all 36 within-device configs and pick the best by F1_pos (with fixed seeds).
+- Add a simple baseline (e.g., logistic regression on MFCC summary stats) to demonstrate the value of deep models.
+- Report uncertainty: mean ± SD across CV folds and, if possible, paired comparisons between representations/backbones.
+- Report operating points: sensitivity/specificity at the tuned threshold and a clinically motivated threshold if applicable.
+
 ## Outputs
 - `results/summary.csv`: aggregated metrics per run (and per device when enabled).
 - `results/<run_name>/metrics.json` and `metrics.csv`: run metadata + metrics.
