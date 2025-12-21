@@ -2,12 +2,8 @@
 
 Final Year Project, Bachelor of Biomedical Sciences, Li Ka Shing Faculty of Medicine, The University of Hong Kong.
 
-## Overview
-- Binary classification: LVEF <= 40% (label 1) vs > 40% (label 0).
-- Inputs: PCG recordings from smartphones (iPhone, Android) and electronic stethoscopes.
-- Representations: MFCC and gammatone spectrograms.
-- Backbones: MobileNetV2, MobileNetV3-Large, EfficientNet-B0, EfficientNetV2-S, SwinV2-Tiny, SwinV2-Small.
-- Patient-level splits to avoid leakage; supports within-device, cross-device, and pooled evaluations.
+## Project Summary
+This project builds a PCG-based screening model for reduced LVEF (binary classification: EF <= 40% vs > 40%) using recordings from iPhone, Android, and digital stethoscope devices. The core comparisons are (1) MFCC vs gammatone time-frequency representations and (2) lightweight CNNs vs SwinV2 backbones, with emphasis on within-device performance and cross-device generalization.
 
 ## Repository Structure
 - `src/data`: metadata, splits, stats, caching, QA.
@@ -24,14 +20,21 @@ pip install -r requirements.txt
 ```
 If you need GPU support, install the appropriate PyTorch build per the official PyTorch instructions.
 
-## Data Expectations
+## Data and Inputs
+Expected structure:
 - `heart_sounds/` with per-patient subfolders containing WAV files.
 - `lvef.csv` with columns `patient_id` and `ef`.
-- `patient_id` is treated as a string (leading zeros are preserved).
+- `patient_id` is treated as a string (leading zeros preserved).
 - Filename parsing is defined in `src/data/build_metadata.py` (`FILENAME_RE`, `DEVICE_MAP`); update if your naming differs.
 - Sensitive data (raw audio, labels) and derived artifacts are gitignored by default for privacy.
 
-## End-to-End Workflow
+## Preprocessing (Audio to Images)
+Audio is resampled to 2000 Hz, band-pass filtered to 20-800 Hz, then center-cropped or zero-padded to 4.0 s. Each waveform is converted to MFCC or gammatone, resized to the model input size, repeated to 3 channels, and normalized using training-split statistics (global or per-device). These steps are identical across devices to avoid leakage.
+
+## Workflow (Narrative)
+1) Build `metadata.csv`, then create patient-level splits and 5-fold CV splits to avoid leakage. 2) Run within-device CV for model selection (F1_pos as the primary metric). 3) Train one final model per device using the selected config, then evaluate cross-device performance using the saved checkpoints (no retraining). 4) Train one pooled model using the best config from within-device results and report overall + per-device metrics.
+
+## Command Reference
 ```bash
 # 1) Build metadata
 python -m src.data.build_metadata \
@@ -74,6 +77,7 @@ python -m src.experiments.run_cv \
   --tune_threshold
 # Optional: add --train_device_filter/--val_device_filter/--test_device_filter
 # (set all three to the same device) for within-device CV.
+# For SwinV2 or EfficientNetV2-S, also set --image_size (256 or 384).
 
 # 7) Train a final within-device model (single run)
 python -m src.training.train \
@@ -108,91 +112,35 @@ python -m src.training.train \
   --results_dir results
 ```
 
-Cached CSVs are named: `splits/cached_<representation>_metadata_{train,val,test}.csv`.  
-If you skip caching, remove `--use_cache` in steps 7–8 and use `splits/metadata_*.csv`.
+Cached CSVs are named: `splits/cached_<representation>_metadata_{train,val,test}.csv`.
+If you skip caching, remove `--use_cache` and use `splits/metadata_*.csv`.
 
-## Training Notes
-- `--use_cache` ignores `--sample_rate`, `--fixed_duration`, `--image_size`, and `--normalization`; ensure cached tensors were built with the intended settings.
-- `--normalization per_device` requires `compute_stats --per_device`.
+## Training and Evaluation Notes
 - Primary metric is F1 for the positive class (low LVEF, label 1).
 - Use `--auto_pos_weight` for class imbalance (neg/pos).
 - Use `--tune_threshold` to select the best decision threshold on the validation set.
-- Use `--grad_accum_steps` if GPU memory is limited.
-- Use `--deterministic` for reproducibility (may reduce performance).
-- Default model selection uses 5-fold CV; single-run training is intended for final checkpoints.
+- `--use_cache` ignores `--sample_rate`, `--fixed_duration`, `--image_size`, and `--normalization`; ensure cached tensors were built with the intended settings.
+- `--normalization per_device` requires `compute_stats --per_device` on the training split only.
 - `--eval_only` uses the checkpoint threshold and skips training (class weighting and tuning are ignored).
 - `run_cv` computes TF stats per fold by default; disable with `--skip_compute_stats`.
-- `run_cv --use_cache` requires cached CSVs per fold; otherwise keep CV on-the-fly.
+- Input size per backbone: 224x224 for MobileNet and EfficientNet-B0, 256x256 for SwinV2-Tiny/Small, and 384x384 for EfficientNetV2-S (matches pretrained configs for more stable transfer).
 - Save predictions only for final selected models to keep output size manageable.
-- Input size per backbone: use 224x224 for MobileNet and EfficientNet-B0, 256x256 for SwinV2-Tiny/Small, and 384x384 for EfficientNetV2-S (timm pretrained configs expect these sizes, which usually yields more stable transfer performance).
-- Optional QA: run `python -m src.data.qa_report --compute_snr` (use `--max_files` to sample) to summarize recording noise levels without adding denoising.
 
-## Experiments
-Run within-device experiments manually (repeat per device/representation/backbone):
-```bash
-python -m src.training.train \
-  --train_csv splits/metadata_train.csv \
-  --val_csv splits/metadata_val.csv \
-  --test_csv splits/metadata_test.csv \
-  --representation mfcc \
-  --backbone mobilenetv2 \
-  --train_device_filter iphone \
-  --val_device_filter iphone \
-  --test_device_filter iphone \
-  --auto_pos_weight \
-  --tune_threshold \
-  --per_device_eval
-```
-Replace `iphone` with `android_phone` or `digital_stethoscope` as needed.
-For cached tensors, switch to `splits/cached_<representation>_metadata_{train,val,test}.csv` and add `--use_cache`.
+## Study Design (Dissertation Workflow)
+Within-device model selection runs 3 devices x 2 representations x 6 backbones (36 configs) with 5-fold CV. After selecting the best config per device, train one final checkpoint per device for cross-device evaluation (3 training runs). Cross-device evaluation uses those checkpoints to test on the other devices (6 eval-only runs). A pooled model is trained once using the best within-device config and reported overall and per-device.
 
-Cross-device evaluation using the best within-device checkpoint (no retraining):
+## QA and SNR Sanity Check (Optional)
+Run QA to summarize data quality and (optionally) a simple SNR proxy (20-800 Hz band-pass energy vs residual):
 ```bash
-python -m src.training.train \
-  --eval_only \
-  --checkpoint_path checkpoints/<run_name>/best.pth \
-  --train_csv splits/metadata_train.csv \
-  --val_csv splits/metadata_val.csv \
-  --test_csv splits/metadata_test.csv \
-  --train_device_filter android_phone \
-  --val_device_filter android_phone \
-  --test_device_filter iphone digital_stethoscope \
-  --per_device_eval
-```
-
-Repeated patient-level CV:
-```bash
-python -m src.data.make_patient_cv_splits \
+python -m src.data.qa_report \
   --metadata_csv metadata.csv \
-  --output_dir splits/cv \
-  --n_splits 5 \
-  --n_repeats 3 \
-  --val_size 0.1
-
-python -m src.experiments.run_cv \
-  --cv_index splits/cv/index.csv \
-  --results_dir results \
-  --output_dir checkpoints \
-  -- \
-  --representation mfcc \
-  --backbone mobilenetv2 \
-  --tune_threshold
+  --output_json reports/qa_report.json \
+  --output_csv reports/qa_records.csv \
+  --fixed_duration 4.0 \
+  --compute_snr \
+  --max_files 200
 ```
-
-## Dissertation Workflow
-- Within-device model selection: 3 devices × 2 representations × 6 backbones = 36 configurations; use 5-fold CV to select the best config per device.
-- Final within-device checkpoints: CV is only for model selection. After picking the best config per device, train once per device on the standard train/val split to create the reusable `best.pth` checkpoints for cross-device evaluation (3 training runs).
-- Cross-device evaluation: evaluate each device’s checkpoint on the other two devices (3 sources × 2 targets = 6 eval-only runs; no retraining).
-- Pooled model: train 1 pooled model using the config chosen from within-device results, then report overall and per-device performance.
-
-## Research Notes
-- Avoid leakage: compute normalization stats only on the training split; for cross-device tests, do not use target-device statistics.
-- Pre-register the selection rule: report all 36 within-device configs and pick the best by F1_pos (with fixed seeds).
-- Add a simple baseline (e.g., logistic regression on MFCC summary stats) to demonstrate the value of deep models.
-- Report uncertainty: mean ± SD across CV folds and, if possible, paired comparisons between representations/backbones.
-- Report operating points: sensitivity/specificity at the tuned threshold and a clinically motivated threshold if applicable.
-  
-SNR sanity check (current dataset): using the QA report SNR proxy (20-800 Hz band-pass energy vs residual), overall mean SNR is ~2.6 dB (median ~4.3 dB). Per device: iPhone ~6.3 dB, digital stethoscope ~4.5 dB, Android ~-3.2 dB. We keep preprocessing minimal (band-pass only) to avoid device-specific denoising bias; this check is reported to justify that choice.
+Example from the current dataset: mean SNR ~2.6 dB (median ~4.3 dB), with iPhone higher than stethoscope and Android lower. This check is used to justify minimal preprocessing (band-pass only) without device-specific denoising.
 
 ## Outputs
 - `results/summary.csv`: aggregated metrics per run (and per device when enabled).
@@ -200,7 +148,6 @@ SNR sanity check (current dataset): using the QA report SNR proxy (20-800 Hz ban
 - `results/<run_name>/predictions_{val,test}.csv`: per-example outputs when enabled.
 - `results/<run_name>/history.csv`: per-epoch metrics when enabled.
 - `checkpoints/<run_name>/best.pth`: best checkpoint by validation F1_pos.
-- Suggested analysis flow: use `results/summary.csv` as the master table, aggregate CV folds by config, and use `predictions_test.csv` for ROC/PR curves from final selected models.
 
 ## Colab
 Use `colab_pipeline.ipynb` for a guided end-to-end run on Google Colab.

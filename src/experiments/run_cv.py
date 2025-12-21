@@ -37,7 +37,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--run_name_format",
         type=str,
-        default="cv_r{repeat:02d}_f{fold:02d}_{backbone}_{representation}_dev{device}_pos{position}",
+        default=(
+            "cv_r{repeat:02d}_f{fold:02d}_{backbone}_{representation}_im{image_size}"
+            "_dev{device}_pos{position}"
+        ),
         help="Run name format string.",
     )
     parser.add_argument(
@@ -185,6 +188,7 @@ def main() -> None:
             fold=fold,
             backbone=backbone,
             representation=representation,
+            image_size=image_size,
             device=device_slug,
             position=position_slug,
         )

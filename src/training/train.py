@@ -627,7 +627,10 @@ def save_predictions_csv(
 # Data
 # --------------------------------------------------------------------------- #
 def describe_labels(name: str, df) -> None:
-    labels = [ef_to_label(float(row["ef"])) for _, row in df.iterrows()]
+    if "label" in df.columns:
+        labels = pd.to_numeric(df["label"], errors="coerce").dropna().astype(int)
+    else:
+        labels = pd.to_numeric(df["ef"], errors="coerce").dropna().apply(ef_to_label)
     unique, counts = np.unique(labels, return_counts=True)
     print(f"{name} label distribution (EF <= 40 -> 1):")
     for u, c in zip(unique, counts):
@@ -670,10 +673,20 @@ def build_datasets(args, mean: float = None, std: float = None):
             "Warning: --train_device_filter is set but no validation device filter "
             "was provided; validation will include all devices."
         )
+    if args.train_device_filter and not (args.test_device_filter or args.device_filter):
+        print(
+            "Warning: --train_device_filter is set but no test device filter "
+            "was provided; test will include all devices."
+        )
     if args.train_position_filter and not (args.val_position_filter or args.position_filter):
         print(
             "Warning: --train_position_filter is set but no validation position filter "
             "was provided; validation will include all positions."
+        )
+    if args.train_position_filter and not (args.test_position_filter or args.position_filter):
+        print(
+            "Warning: --train_position_filter is set but no test position filter "
+            "was provided; test will include all positions."
         )
 
     train_device_filter = _resolve_filter(args.device_filter, args.train_device_filter)
