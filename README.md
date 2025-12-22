@@ -18,7 +18,7 @@ Final Year Project, Bachelor of Biomedical Sciences, Li Ka Shing Faculty of Medi
 - [Colab](#colab)
 
 ## Project Summary
-This project builds a PCG-based screening model for reduced LVEF (binary classification: EF <= 40% vs > 40%) using recordings from iPhone, Android, and digital stethoscope devices. The core comparisons are (1) MFCC vs gammatone time-frequency representations and (2) lightweight CNNs vs SwinV2 backbones, with emphasis on within-device performance and cross-device generalization.
+This project builds a phonocardiogram-based (PCG-based) screening model for reduced LVEF (binary classification: EF <= 40% vs > 40%) using recordings from iPhone, Android, and digital stethoscope devices. The core comparisons are (1) MFCC vs gammatone time-frequency representations and (2) lightweight CNNs vs SwinV2 backbones, with emphasis on within-device performance, cross-device generalization, and pooled-device training.
 
 ## Repository Structure
 - `src/data`: metadata, splits, stats, caching, QA.
