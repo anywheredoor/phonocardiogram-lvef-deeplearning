@@ -44,7 +44,7 @@ Expected structure:
 - Sensitive data (raw audio, labels) and derived artifacts are gitignored by default for privacy.
 
 ## Preprocessing
-Audio is resampled to 2000 Hz, band-pass filtered to 20-800 Hz, then center-cropped or zero-padded to 4.0 s. Each waveform is converted to MFCC or gammatone, resized to the model input size, repeated to 3 channels, and normalized using training-split statistics (global or per-device). These steps are identical across devices to avoid leakage.
+Audio is resampled to 2000 Hz, band-pass filtered to 20-800 Hz, then center-cropped or zero-padded to 4.0 s. Each waveform is converted to MFCC or gammatone, resized to the model input size, repeated to 3 channels, and normalized using training-split statistics (single-set or per-device). These steps are identical across devices to avoid leakage.
 
 ## Workflow
 1. Build `metadata.csv`, then create patient-level splits and 5-fold CV splits to avoid leakage.
@@ -147,7 +147,7 @@ Defaults from `src/training/train.py` (unless overridden in the notebook or CLI)
 - `sample_rate`: 2000
 - `fixed_duration`: 4.0 s
 - `image_size`: 224 (overridden for SwinV2/EfficientNetV2-S as documented)
-- `normalization`: global
+- `normalization`: global (single-set stats)
 - `amp`: off by default (enable with `--amp`)
 - `auto_pos_weight`: off by default (enable with `--auto_pos_weight`)
 - `tune_threshold`: off by default (enable with `--tune_threshold`)
