@@ -25,6 +25,8 @@ venv/
 /results/
 /reports/
 summary.csv
+best_config_per_device.csv
+config_summary_by_device.csv
 
 # Model weights / tensors
 *.pth
