@@ -184,6 +184,8 @@ Example from the current dataset: mean SNR ~2.6 dB (median ~4.3 dB), with iPhone
 - `results/<run_name>/metrics.json` and `metrics.csv`: run metadata + metrics.
 - `results/<run_name>/predictions_{val,test}.csv`: per-example outputs when enabled.
 - `results/<run_name>/history.csv`: per-epoch metrics when enabled.
+- `results/selection/best_config_per_device.csv`: best config per device from summary.csv.
+- `results/selection/config_summary_by_device.csv`: aggregated config stats per device.
 - `checkpoints/<run_name>/best.pth`: best checkpoint by validation F1_pos.
 
 ## Colab
