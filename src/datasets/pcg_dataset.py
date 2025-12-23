@@ -11,7 +11,7 @@ PCGDataset
 """
 
 import os
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -52,8 +52,8 @@ class PCGDataset(Dataset):
         sample_rate: int = 2000,
         fixed_duration: float = 4.0,  # seconds
         image_size: int = 224,
-        mean: Optional[Union[float, Dict[str, float]]] = None,
-        std: Optional[Union[float, Dict[str, float]]] = None,
+        mean: Optional[float] = None,
+        std: Optional[float] = None,
         device_filter: Optional[List[str]] = None,  # e.g. ["iphone"]
         position_filter: Optional[List[str]] = None,  # e.g. ["M"]
         clamp: bool = True,
@@ -66,8 +66,6 @@ class PCGDataset(Dataset):
             fixed_duration: Waveform duration (seconds) after cropping/padding.
             image_size: Output H=W size for the spectrogram image.
             mean, std: Optional z-score normalisation parameters.
-                Can be scalars (global) or dicts keyed by device, with an
-                optional "__global__" fallback (computed on training set only).
             device_filter: Optional list of device names to keep
                 (values from metadata 'device' column).
             position_filter: Optional list of positions to keep
@@ -278,16 +276,7 @@ class PCGDataset(Dataset):
 
         mean = self.mean
         std = self.std
-        if isinstance(mean, dict) or isinstance(std, dict):
-            mean_val = mean.get(device) if isinstance(mean, dict) else None
-            std_val = std.get(device) if isinstance(std, dict) else None
-            if mean_val is None and isinstance(mean, dict):
-                mean_val = mean.get("__global__")
-            if std_val is None and isinstance(std, dict):
-                std_val = std.get("__global__")
-            if (mean_val is not None) and (std_val is not None):
-                img = (img - mean_val) / (std_val + 1e-8)
-        elif (mean is not None) and (std is not None):
+        if (mean is not None) and (std is not None):
             img = (img - mean) / (std + 1e-8)
 
         if self.clamp:
@@ -329,4 +318,3 @@ class PCGDataset(Dataset):
             meta["filename"] = row["filename"]
 
         return img, label, meta
-

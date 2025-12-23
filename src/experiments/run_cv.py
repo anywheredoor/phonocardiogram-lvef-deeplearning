@@ -7,7 +7,7 @@ import argparse
 import os
 import subprocess
 import sys
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 
@@ -149,6 +149,9 @@ def main() -> None:
     representation = _find_arg_value(extra_args, "--representation", "mfcc")
     normalization = _find_arg_value(extra_args, "--normalization", "global")
     tf_stats_arg = _find_arg_value(extra_args, "--tf_stats_json", "")
+    if normalization == "per_device":
+        print("ERROR: per-device normalization has been removed; use --normalization global or none.")
+        sys.exit(1)
 
     train_device_filter = _find_arg_list(extra_args, "--train_device_filter")
     device_filter = train_device_filter or _find_arg_list(extra_args, "--device_filter")
@@ -188,11 +191,11 @@ def main() -> None:
 
         fold_extra_args = list(extra_args)
 
-    compute_stats = (
-        not args.skip_compute_stats
-        and normalization != "none"
-        and not tf_stats_arg
-    )
+        compute_stats = (
+            not args.skip_compute_stats
+            and normalization != "none"
+            and not tf_stats_arg
+        )
         if compute_stats:
             fold_dir = os.path.dirname(train_csv)
             stats_tag = (
@@ -214,8 +217,6 @@ def main() -> None:
                     "--output_json",
                     stats_path,
                 ]
-                if normalization == "per_device":
-                    stats_cmd.append("--per_device")
                 if device_filter:
                     stats_cmd.append("--device_filter")
                     stats_cmd.extend(device_filter)

@@ -44,7 +44,7 @@ Expected structure:
 - Sensitive data (raw audio, labels) and derived artifacts are gitignored by default for privacy.
 
 ## Preprocessing
-Audio is resampled to 2000 Hz, band-pass filtered to 20-800 Hz, then center-cropped or zero-padded to 4.0 s. Each waveform is converted to MFCC or gammatone, resized to the model input size, repeated to 3 channels, and normalized using training-split statistics (single-set or per-device). These steps are identical across devices to avoid leakage.
+Audio is resampled to 2000 Hz, band-pass filtered to 20-800 Hz, then center-cropped or zero-padded to 4.0 s. Each waveform is converted to MFCC or gammatone, resized to the model input size, repeated to 3 channels, and normalized using training-split statistics (single-set for the chosen subset). These steps are identical across devices to avoid leakage.
 
 ## Workflow
 1. Build `metadata.csv`, then create patient-level splits and 5-fold CV splits to avoid leakage.

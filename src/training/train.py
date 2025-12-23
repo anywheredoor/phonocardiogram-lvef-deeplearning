@@ -19,7 +19,7 @@ import json
 import os
 import random
 from datetime import datetime, timezone
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -156,7 +156,7 @@ def parse_args() -> argparse.Namespace:
         "--normalization",
         type=str,
         default="global",
-        choices=["global", "per_device", "none"],
+        choices=["global", "none"],
         help="Normalization strategy for on-the-fly features.",
     )
     parser.add_argument(
@@ -422,7 +422,7 @@ def blank_metrics() -> dict:
 
 def load_tf_stats(
     tf_stats_json: str, representation: str, normalization: str
-) -> Tuple[object, object]:
+) -> Tuple[Optional[float], Optional[float]]:
     with open(tf_stats_json, "r") as f:
         stats = json.load(f)
 
@@ -436,19 +436,6 @@ def load_tf_stats(
         return None, None
     if normalization == "global":
         return float(rep_stats["mean"]), float(rep_stats["std"])
-    if normalization == "per_device":
-        per_device = rep_stats.get("per_device")
-        if per_device is None:
-            raise ValueError(
-                f"No per_device stats found for {representation} in {tf_stats_json}. "
-                "Recompute stats with --per_device."
-            )
-        mean_map = {"__global__": float(rep_stats["mean"])}
-        std_map = {"__global__": float(rep_stats["std"])}
-        for device, vals in per_device.items():
-            mean_map[device] = float(vals["mean"])
-            std_map[device] = float(vals["std"])
-        return mean_map, std_map
     raise ValueError(f"Unknown normalization strategy: {normalization}")
 
 
@@ -982,12 +969,6 @@ def main():
             print(
                 f"Loaded TF stats for {args.representation}: "
                 f"mean={mean:.6f}, std={std:.6f}"
-            )
-        elif args.normalization == "per_device":
-            device_keys = [k for k in mean.keys() if k != "__global__"]
-            print(
-                f"Loaded per-device stats for {args.representation}: "
-                f"{len(device_keys)} device(s)"
             )
     else:
         print("Normalisation disabled for on-the-fly features.")
