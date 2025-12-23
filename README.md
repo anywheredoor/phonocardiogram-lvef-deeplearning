@@ -76,7 +76,6 @@ python -m src.data.make_patient_cv_splits \
 python -m src.data.compute_stats \
   --train_csv splits/metadata_train.csv \
   --representations mfcc gammatone
-# Optional: add --per_device if you plan to use --normalization per_device
 
 # 5) Run 5-fold CV (default evaluation path)
 python -m src.experiments.run_cv \
@@ -127,7 +126,6 @@ python -m src.training.train \
 - Primary metric is F1 for the positive class (low LVEF, label 1).
 - Use `--auto_pos_weight` for class imbalance (neg/pos).
 - Use `--tune_threshold` to select the best decision threshold on the validation set.
-- `--normalization per_device` requires `compute_stats --per_device` on the training split only.
 - `--eval_only` uses the checkpoint threshold and skips training (class weighting and tuning are ignored).
 - `run_cv` computes TF stats per fold by default; disable with `--skip_compute_stats`.
 - Input size per backbone: 224x224 for MobileNet and EfficientNet-B0, 256x256 for SwinV2-Tiny/Small, and 384x384 for EfficientNetV2-S (matches pretrained configs for more stable transfer).
