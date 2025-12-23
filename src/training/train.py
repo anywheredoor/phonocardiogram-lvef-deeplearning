@@ -4,7 +4,6 @@ Unified training entrypoint for PCG-based low LVEF detection.
 
 Supports:
     - On-the-fly spectrogram computation (PCGDataset).
-    - Cached spectrogram tensors (CachedPCGDataset).
     - ImageNet-pretrained backbones from timm.
     - BCEWithLogitsLoss with optional (auto) positive-class weighting.
     - Split-specific device/position filters (train/val/test).
@@ -29,7 +28,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
-from src.datasets.pcg_dataset import CachedPCGDataset, PCGDataset, ef_to_label
+from src.datasets.pcg_dataset import PCGDataset, ef_to_label
 from src.models.models import BACKBONE_CONFIGS, create_model
 from src.utils.metrics import compute_binary_metrics, format_metrics, sigmoid_probs, tune_threshold
 
@@ -222,11 +221,6 @@ def parse_args() -> argparse.Namespace:
         help="Enable mixed precision (AMP) when using CUDA.",
     )
     parser.add_argument(
-        "--use_cache",
-        action="store_true",
-        help="Use CachedPCGDataset instead of on-the-fly spectrograms.",
-    )
-    parser.add_argument(
         "--grad_accum_steps",
         type=int,
         default=1,
@@ -366,7 +360,7 @@ def validate_input_paths(args: argparse.Namespace) -> None:
         path = getattr(args, key, None)
         if path and not os.path.isfile(path):
             raise FileNotFoundError(f"{key} not found: {path}")
-    if not args.use_cache and args.normalization != "none":
+    if args.normalization != "none":
         if not os.path.isfile(args.tf_stats_json):
             raise FileNotFoundError(
                 f"tf_stats_json not found: {args.tf_stats_json}"
@@ -397,7 +391,6 @@ def apply_checkpoint_args(args: argparse.Namespace, ckpt_args: dict) -> None:
     override_fields = [
         "representation",
         "backbone",
-        "use_cache",
         "image_size",
         "sample_rate",
         "fixed_duration",
@@ -533,34 +526,6 @@ def apply_warmup_lr(optimizer, base_lr: float, warmup_epochs: int, epoch: int) -
     return optimizer.param_groups[0]["lr"]
 
 
-def resolve_cached_csv_path(path: str, representation: str) -> str:
-    base = os.path.basename(path)
-    directory = os.path.dirname(path)
-    if base.startswith(f"cached_{representation}_"):
-        return path
-    if base.startswith("cached_"):
-        if base.startswith("cached_metadata_"):
-            candidate = os.path.join(directory, f"cached_{representation}_{base[len('cached_'):]}")
-            if os.path.exists(candidate):
-                return candidate
-            raise FileNotFoundError(
-                f"Cached CSV not found for representation '{representation}': {candidate}"
-            )
-        raise ValueError(
-            f"Cached CSV appears to be for a different representation: {path}"
-        )
-    if base.startswith("metadata_"):
-        candidate = os.path.join(directory, f"cached_{representation}_{base}")
-        if os.path.exists(candidate):
-            return candidate
-        raise FileNotFoundError(
-            f"Cached CSV not found for representation '{representation}': {candidate}"
-        )
-    if os.path.exists(path):
-        return path
-    raise FileNotFoundError(f"CSV not found: {path}")
-
-
 def _unbatch_meta(meta):
     if meta is None:
         return []
@@ -638,36 +603,6 @@ def describe_labels(name: str, df) -> None:
 
 
 def build_datasets(args, mean: float = None, std: float = None):
-    if args.use_cache:
-        train_base = os.path.basename(args.train_csv)
-        val_base = os.path.basename(args.val_csv)
-        test_base = os.path.basename(args.test_csv)
-        rep_prefix = f"cached_{args.representation}_metadata_"
-        if (
-            train_base.startswith("cached_")
-            and not train_base.startswith(rep_prefix)
-        ):
-            raise ValueError(
-                f"--use_cache expects cached CSVs for representation '{args.representation}'. "
-                f"Got train_csv={args.train_csv}"
-            )
-        if (
-            val_base.startswith("cached_")
-            and not val_base.startswith(rep_prefix)
-        ):
-            raise ValueError(
-                f"--use_cache expects cached CSVs for representation '{args.representation}'. "
-                f"Got val_csv={args.val_csv}"
-            )
-        if (
-            test_base.startswith("cached_")
-            and not test_base.startswith(rep_prefix)
-        ):
-            raise ValueError(
-                f"--use_cache expects cached CSVs for representation '{args.representation}'. "
-                f"Got test_csv={args.test_csv}"
-            )
-
     if args.train_device_filter and not (args.val_device_filter or args.device_filter):
         print(
             "Warning: --train_device_filter is set but no validation device filter "
@@ -703,58 +638,41 @@ def build_datasets(args, mean: float = None, std: float = None):
         args.position_filter, args.test_position_filter
     )
 
-    if args.use_cache:
-        train_ds = CachedPCGDataset(
-            args.train_csv,
-            device_filter=train_device_filter,
-            position_filter=train_position_filter,
-        )
-        val_ds = CachedPCGDataset(
-            args.val_csv,
-            device_filter=val_device_filter,
-            position_filter=val_position_filter,
-        )
-        test_ds = CachedPCGDataset(
-            args.test_csv,
-            device_filter=test_device_filter,
-            position_filter=test_position_filter,
-        )
-    else:
-        if args.normalization != "none" and (mean is None or std is None):
-            raise ValueError("Mean/std must be provided for on-the-fly features.")
-        train_ds = PCGDataset(
-            csv_path=args.train_csv,
-            representation=args.representation,
-            mean=mean,
-            std=std,
-            device_filter=train_device_filter,
-            position_filter=train_position_filter,
-            image_size=args.image_size,
-            sample_rate=args.sample_rate,
-            fixed_duration=args.fixed_duration,
-        )
-        val_ds = PCGDataset(
-            csv_path=args.val_csv,
-            representation=args.representation,
-            mean=mean,
-            std=std,
-            device_filter=val_device_filter,
-            position_filter=val_position_filter,
-            image_size=args.image_size,
-            sample_rate=args.sample_rate,
-            fixed_duration=args.fixed_duration,
-        )
-        test_ds = PCGDataset(
-            csv_path=args.test_csv,
-            representation=args.representation,
-            mean=mean,
-            std=std,
-            device_filter=test_device_filter,
-            position_filter=test_position_filter,
-            image_size=args.image_size,
-            sample_rate=args.sample_rate,
-            fixed_duration=args.fixed_duration,
-        )
+    if args.normalization != "none" and (mean is None or std is None):
+        raise ValueError("Mean/std must be provided for on-the-fly features.")
+    train_ds = PCGDataset(
+        csv_path=args.train_csv,
+        representation=args.representation,
+        mean=mean,
+        std=std,
+        device_filter=train_device_filter,
+        position_filter=train_position_filter,
+        image_size=args.image_size,
+        sample_rate=args.sample_rate,
+        fixed_duration=args.fixed_duration,
+    )
+    val_ds = PCGDataset(
+        csv_path=args.val_csv,
+        representation=args.representation,
+        mean=mean,
+        std=std,
+        device_filter=val_device_filter,
+        position_filter=val_position_filter,
+        image_size=args.image_size,
+        sample_rate=args.sample_rate,
+        fixed_duration=args.fixed_duration,
+    )
+    test_ds = PCGDataset(
+        csv_path=args.test_csv,
+        representation=args.representation,
+        mean=mean,
+        std=std,
+        device_filter=test_device_filter,
+        position_filter=test_position_filter,
+        image_size=args.image_size,
+        sample_rate=args.sample_rate,
+        fixed_duration=args.fixed_duration,
+    )
 
     describe_labels("Train", train_ds.df)
     describe_labels("Val", val_ds.df)
@@ -948,7 +866,6 @@ def save_run_outputs(
         "representation": args.representation,
         "backbone": args.backbone,
         "eval_only": args.eval_only,
-        "use_cache": args.use_cache,
         "device_filter": ",".join(args.device_filter) if args.device_filter else "",
         "train_device_filter": ",".join(args.train_device_filter) if args.train_device_filter else "",
         "val_device_filter": ",".join(args.val_device_filter) if args.val_device_filter else "",
@@ -1042,20 +959,6 @@ def main():
         eff_bs = args.batch_size * args.grad_accum_steps
         print(f"Gradient accumulation: {args.grad_accum_steps} step(s) (effective batch={eff_bs})")
 
-    if args.use_cache:
-        orig_train = args.train_csv
-        orig_val = args.val_csv
-        orig_test = args.test_csv
-        args.train_csv = resolve_cached_csv_path(args.train_csv, args.representation)
-        args.val_csv = resolve_cached_csv_path(args.val_csv, args.representation)
-        args.test_csv = resolve_cached_csv_path(args.test_csv, args.representation)
-        if args.train_csv != orig_train:
-            print(f"Resolved train_csv -> {args.train_csv}")
-        if args.val_csv != orig_val:
-            print(f"Resolved val_csv -> {args.val_csv}")
-        if args.test_csv != orig_test:
-            print(f"Resolved test_csv -> {args.test_csv}")
-
     validate_input_paths(args)
 
     if args.run_name:
@@ -1071,40 +974,23 @@ def main():
     os.makedirs(run_dir, exist_ok=True)
 
     mean = std = None
-    if not args.use_cache:
-        if args.normalization != "none":
-            mean, std = load_tf_stats(
-                args.tf_stats_json, args.representation, args.normalization
+    if args.normalization != "none":
+        mean, std = load_tf_stats(
+            args.tf_stats_json, args.representation, args.normalization
+        )
+        if args.normalization == "global" and mean is not None:
+            print(
+                f"Loaded TF stats for {args.representation}: "
+                f"mean={mean:.6f}, std={std:.6f}"
             )
-            if args.normalization == "global" and mean is not None:
-                print(
-                    f"Loaded TF stats for {args.representation}: "
-                    f"mean={mean:.6f}, std={std:.6f}"
-                )
-            elif args.normalization == "per_device":
-                device_keys = [k for k in mean.keys() if k != "__global__"]
-                print(
-                    f"Loaded per-device stats for {args.representation}: "
-                    f"{len(device_keys)} device(s)"
-                )
-        else:
-            print("Normalisation disabled for on-the-fly features.")
+        elif args.normalization == "per_device":
+            device_keys = [k for k in mean.keys() if k != "__global__"]
+            print(
+                f"Loaded per-device stats for {args.representation}: "
+                f"{len(device_keys)} device(s)"
+            )
     else:
-        if args.sample_rate != 2000 or args.fixed_duration != 4.0:
-            print(
-                "Warning: --sample_rate/--fixed_duration are ignored with --use_cache. "
-                "Ensure cached tensors were built with your desired settings."
-            )
-        if args.image_size != 224:
-            print(
-                "Warning: --image_size is ignored with --use_cache. "
-                "Ensure cached tensors were built with your desired image_size."
-            )
-        if args.normalization != "none":
-            print(
-                "Note: --normalization is ignored with --use_cache. "
-                "Ensure cached tensors were built with the intended normalization."
-            )
+        print("Normalisation disabled for on-the-fly features.")
 
     train_ds, val_ds, test_ds = build_datasets(args, mean, std)
 

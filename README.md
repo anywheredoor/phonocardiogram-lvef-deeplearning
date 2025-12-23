@@ -21,8 +21,8 @@ Final Year Project, Bachelor of Biomedical Sciences, Li Ka Shing Faculty of Medi
 This project builds a phonocardiogram-based (PCG-based) screening model for reduced LVEF (binary classification: EF <= 40% vs > 40%) using recordings from iPhone, Android, and digital stethoscope devices. The core comparisons are (1) MFCC vs gammatone time-frequency representations and (2) lightweight CNNs vs SwinV2 backbones, with emphasis on within-device performance, cross-device generalization, and pooled-device training.
 
 ## Repository Structure
-- `src/data`: metadata, splits, stats, caching, QA.
-- `src/datasets`: on-the-fly and cached datasets.
+- `src/data`: metadata, splits, stats, QA.
+- `src/datasets`: on-the-fly datasets.
 - `src/models`: backbone factory.
 - `src/training`: training entry point.
 - `src/experiments`: CV runner.
@@ -72,18 +72,13 @@ python -m src.data.make_patient_cv_splits \
   --n_splits 5 \
   --n_repeats 1
 
-# 4) Compute TF stats (train split only; used for caching or non-CV training)
+# 4) Compute TF stats (train split only; used for non-CV training)
 python -m src.data.compute_stats \
   --train_csv splits/metadata_train.csv \
   --representations mfcc gammatone
 # Optional: add --per_device if you plan to use --normalization per_device
 
-# 5) Precompute cached tensors (optional but faster; requires tf_stats.json)
-python -m src.data.precompute_cache --representation mfcc
-python -m src.data.precompute_cache --representation gammatone
-# Optional: add --normalization per_device if you computed per-device stats
-
-# 6) Run 5-fold CV (default evaluation path)
+# 5) Run 5-fold CV (default evaluation path)
 python -m src.experiments.run_cv \
   --cv_index splits/cv/index.csv \
   --results_dir results \
@@ -97,47 +92,41 @@ python -m src.experiments.run_cv \
 # (set all three to the same device) for within-device CV.
 # For SwinV2 or EfficientNetV2-S, also set --image_size (256 or 384).
 
-# 7) Train a final within-device model (single run)
+# 6) Train a final within-device model (single run)
 python -m src.training.train \
-  --train_csv splits/cached_mfcc_metadata_train.csv \
-  --val_csv splits/cached_mfcc_metadata_val.csv \
-  --test_csv splits/cached_mfcc_metadata_test.csv \
+  --train_csv splits/metadata_train.csv \
+  --val_csv splits/metadata_val.csv \
+  --test_csv splits/metadata_test.csv \
   --representation mfcc \
   --backbone mobilenetv2 \
   --train_device_filter iphone \
   --val_device_filter iphone \
   --test_device_filter iphone \
-  --use_cache \
   --auto_pos_weight \
   --tune_threshold \
   --amp \
   --save_predictions \
   --results_dir results
 
-# 8) Cross-device evaluation using the saved checkpoint (no retraining)
+# 7) Cross-device evaluation using the saved checkpoint (no retraining)
 python -m src.training.train \
   --eval_only \
   --checkpoint_path checkpoints/<run_name>/best.pth \
-  --train_csv splits/cached_mfcc_metadata_train.csv \
-  --val_csv splits/cached_mfcc_metadata_val.csv \
-  --test_csv splits/cached_mfcc_metadata_test.csv \
+  --train_csv splits/metadata_train.csv \
+  --val_csv splits/metadata_val.csv \
+  --test_csv splits/metadata_test.csv \
   --train_device_filter iphone \
   --val_device_filter iphone \
   --test_device_filter android_phone digital_stethoscope \
   --per_device_eval \
-  --use_cache \
   --save_predictions \
   --results_dir results
 ```
-
-Cached CSVs are named: `splits/cached_<representation>_metadata_{train,val,test}.csv`.
-If you skip caching, remove `--use_cache` and use `splits/metadata_*.csv`.
 
 ## Training and Evaluation Notes
 - Primary metric is F1 for the positive class (low LVEF, label 1).
 - Use `--auto_pos_weight` for class imbalance (neg/pos).
 - Use `--tune_threshold` to select the best decision threshold on the validation set.
-- `--use_cache` ignores `--sample_rate`, `--fixed_duration`, `--image_size`, and `--normalization`; ensure cached tensors were built with the intended settings.
 - `--normalization per_device` requires `compute_stats --per_device` on the training split only.
 - `--eval_only` uses the checkpoint threshold and skips training (class weighting and tuning are ignored).
 - `run_cv` computes TF stats per fold by default; disable with `--skip_compute_stats`.

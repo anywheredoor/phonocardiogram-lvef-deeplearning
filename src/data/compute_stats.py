@@ -4,7 +4,7 @@ Compute dataset-level mean/std for time-frequency images.
 
 This walks through the training split with PCGDataset (on-the-fly features) and
 records a single global mean and std per representation. These stats are used
-for z-score normalisation during training and during cache precomputation.
+for z-score normalisation during training.
 Use --device_filter / --position_filter to restrict the computation to a
 subset of devices or auscultation positions.
 Use --per_device to also compute per-device stats.

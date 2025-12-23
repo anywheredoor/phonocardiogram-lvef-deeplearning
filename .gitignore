@@ -19,7 +19,6 @@ venv/
 
 # Derived artifacts
 /splits/
-/cache/
 /checkpoints/
 /checkpoints_cpu/
 /results/

@@ -7,7 +7,7 @@ import argparse
 import os
 import subprocess
 import sys
-from typing import List, Optional
+from typing import List
 
 import pandas as pd
 
@@ -65,7 +65,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "Skip per-fold TF stats computation. Only use if you provide "
-            "--tf_stats_json via extra args or use cached tensors."
+            "--tf_stats_json via extra args."
         ),
     )
     parser.add_argument(
@@ -119,20 +119,6 @@ def _sanitize(value: str) -> str:
     return safe
 
 
-def _resolve_cached_csv(path: str, representation: str) -> Optional[str]:
-    base = os.path.basename(path)
-    directory = os.path.dirname(path)
-    if base.startswith(f"cached_{representation}_"):
-        return path
-    if base.startswith("cached_metadata_"):
-        return os.path.join(directory, f"cached_{representation}_{base[len('cached_'):]}")
-    if base.startswith("metadata_"):
-        return os.path.join(directory, f"cached_{representation}_{base}")
-    if base.startswith("cached_"):
-        return None
-    return None
-
-
 def main() -> None:
     args = parse_args()
 
@@ -155,12 +141,14 @@ def main() -> None:
     extra_args = args.extra_args
     if extra_args and extra_args[0] == "--":
         extra_args = extra_args[1:]
+    if "--use_cache" in extra_args:
+        print("ERROR: caching has been removed; drop --use_cache.")
+        sys.exit(1)
 
     backbone = _find_arg_value(extra_args, "--backbone", "backbone")
     representation = _find_arg_value(extra_args, "--representation", "mfcc")
     normalization = _find_arg_value(extra_args, "--normalization", "global")
     tf_stats_arg = _find_arg_value(extra_args, "--tf_stats_json", "")
-    use_cache = "--use_cache" in extra_args
 
     train_device_filter = _find_arg_list(extra_args, "--train_device_filter")
     device_filter = train_device_filter or _find_arg_list(extra_args, "--device_filter")
@@ -200,26 +188,11 @@ def main() -> None:
 
         fold_extra_args = list(extra_args)
 
-        compute_stats = (
-            not args.skip_compute_stats
-            and not use_cache
-            and normalization != "none"
-            and not tf_stats_arg
-        )
-        if use_cache:
-            expected = [
-                _resolve_cached_csv(train_csv, representation),
-                _resolve_cached_csv(val_csv, representation),
-                _resolve_cached_csv(test_csv, representation),
-            ]
-            if any(p is None for p in expected) or any(
-                p is not None and not os.path.exists(p) for p in expected
-            ):
-                print(
-                    "ERROR: --use_cache requires cached CSVs for each fold. "
-                    "Precompute caches per fold or disable --use_cache."
-                )
-                sys.exit(1)
+    compute_stats = (
+        not args.skip_compute_stats
+        and normalization != "none"
+        and not tf_stats_arg
+    )
         if compute_stats:
             fold_dir = os.path.dirname(train_csv)
             stats_tag = (

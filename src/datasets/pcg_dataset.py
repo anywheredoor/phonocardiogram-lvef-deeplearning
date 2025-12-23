@@ -8,10 +8,6 @@ PCGDataset
     - Builds MFCC or gammatone time-frequency images.
     - Normalises with dataset-level mean/std if provided.
     - Outputs tensors shaped (3, image_size, image_size) plus binary label.
-
-CachedPCGDataset
-    - Loads precomputed spectrogram tensors from 'cache_path' in CSV.
-    - Useful when precompute_cache.py has been run.
 """
 
 import os
@@ -334,62 +330,3 @@ class PCGDataset(Dataset):
 
         return img, label, meta
 
-
-class CachedPCGDataset(Dataset):
-    """
-    Dataset that loads precomputed [3, H, W] tensors from 'cache_path' in CSV.
-
-    Assumes:
-      - CSV has columns: patient_id, device, ef, path, cache_path
-      - cache_path points to a .pt file with a float32 tensor (3, H, W)
-      - Label is derived from EF (1 if ef <= 40, else 0)
-    """
-
-    def __init__(
-        self,
-        csv_path: str,
-        device_filter: Optional[List[str]] = None,
-        position_filter: Optional[List[str]] = None,
-    ):
-        super().__init__()
-        self.csv_path = csv_path
-        self.df = pd.read_csv(csv_path, dtype={"patient_id": str})
-
-        required_cols = ["patient_id", "device", "ef", "path", "cache_path"]
-        for c in required_cols:
-            if c not in self.df.columns:
-                raise ValueError(f"CSV {csv_path} must contain column '{c}'.")
-
-        if device_filter is not None:
-            self.df = self.df[self.df["device"].isin(device_filter)]
-        if position_filter is not None and "position" in self.df.columns:
-            self.df = self.df[self.df["position"].isin(position_filter)]
-
-        self.df = self.df.reset_index(drop=True)
-        if len(self.df) == 0:
-            raise ValueError("After filtering, no rows remain in the dataset.")
-
-    def __len__(self):
-        return len(self.df)
-
-    def __getitem__(self, idx):
-        row = self.df.iloc[idx]
-
-        cache_path = row["cache_path"]
-        img = torch.load(cache_path)  # [3, H, W] float32
-
-        ef = float(row["ef"])
-        label = ef_to_label(ef)
-
-        meta = {
-            "patient_id": str(row["patient_id"]),
-            "device": row["device"],
-            "ef": ef,
-            "path": row["path"],
-        }
-        if "position" in row:
-            meta["position"] = row["position"]
-        if "filename" in row:
-            meta["filename"] = row["filename"]
-
-        return img, label, meta
