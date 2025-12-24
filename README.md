@@ -7,13 +7,12 @@ Final Year Project, Bachelor of Biomedical Sciences, Li Ka Shing Faculty of Medi
 - [Repository Structure](#repository-structure)
 - [Requirements](#requirements)
 - [Data and Inputs](#data-and-inputs)
+- [QA and SNR Sanity Check](#qa-and-snr-sanity-check)
 - [Preprocessing](#preprocessing)
-- [Workflow](#workflow)
+- [Study Workflow](#study-workflow)
 - [Command Reference](#command-reference)
 - [Training and Evaluation Notes](#training-and-evaluation-notes)
 - [Default Hyperparameters](#default-hyperparameters)
-- [Study Design (Dissertation Workflow)](#study-design-dissertation-workflow)
-- [Quality Assurance and Signal-to-Noise Ratio Sanity Check (Optional)](#quality-assurance-and-signal-to-noise-ratio-sanity-check-optional)
 - [Outputs](#outputs)
 - [Colab](#colab)
 
@@ -43,14 +42,29 @@ Expected structure:
 - Filename parsing is defined in `src/data/build_metadata.py` (`FILENAME_RE`, `DEVICE_MAP`); update if your naming differs.
 - Sensitive data (raw audio, labels) and derived artifacts are gitignored by default for privacy.
 
+## QA and SNR Sanity Check
+Quality assurance checks create a short report so you can spot obvious data issues before training. They summarize missing files, label consistency, device counts, and recording durations. If you enable `--compute_snr`, the signal-to-noise ratio estimate compares energy inside the heart‑sound band (20–800 Hz) to energy outside it.
+```bash
+python -m src.data.qa_report \
+  --metadata_csv metadata.csv \
+  --output_json reports/qa_report.json \
+  --output_csv reports/qa_records.csv \
+  --fixed_duration 4.0 \
+  --compute_snr \
+  --max_files 200
+```
+Use this report as a sanity check only; it does not change your data. Values will vary by dataset, and the SNR estimate is a simple proxy (not a full denoising step).
+
 ## Preprocessing
 Audio is resampled to 2000 Hz, band-pass filtered to 20-800 Hz, then center-cropped or zero-padded to 4.0 s. Each waveform is converted to MFCC or gammatone, resized to the model input size, repeated to 3 channels, and normalized using training-split statistics (single-set for the chosen subset). These steps are identical across devices to avoid leakage.
 
-## Workflow
+## Study Workflow
 1. Build `metadata.csv`, then create patient-level splits and 5-fold CV splits to avoid leakage.
 2. Run within-device CV for model selection (F1_pos as the primary metric), then summarise configs with `select_best_config.py`.
 3. Train one final model per device using the selected config, then evaluate cross-device performance using the saved checkpoints (no retraining).
 4. Train one pooled model using the best config from within-device results and report overall + per-device metrics.
+
+Within-device model selection runs 3 devices x 2 representations x 6 backbones (36 configs) with 5-fold CV. After selecting the best config per device, train one final checkpoint per device for cross-device evaluation (3 training runs). Cross-device evaluation uses those checkpoints to test on the other devices (6 eval-only runs). A pooled model is trained once using the best within-device config and reported overall and per-device.
 
 ## Command Reference
 ```bash
@@ -158,22 +172,6 @@ Defaults from `src/training/train.py` (unless overridden in the notebook or CLI)
 - `amp`: off by default (enable with `--amp`)
 - `auto_pos_weight`: off by default (enable with `--auto_pos_weight`)
 - `tune_threshold`: off by default (enable with `--tune_threshold`)
-
-## Study Design (Dissertation Workflow)
-Within-device model selection runs 3 devices x 2 representations x 6 backbones (36 configs) with 5-fold CV. After selecting the best config per device, train one final checkpoint per device for cross-device evaluation (3 training runs). Cross-device evaluation uses those checkpoints to test on the other devices (6 eval-only runs). A pooled model is trained once using the best within-device config and reported overall and per-device.
-
-## Quality Assurance and Signal-to-Noise Ratio Sanity Check (Optional)
-This optional check creates a short report so you can spot obvious data issues before training. It summarizes missing files, label consistency, device counts, and recording durations. If you enable `--compute_snr`, it also estimates a rough noise level by comparing energy inside the heart‑sound band (20–800 Hz) to energy outside it.
-```bash
-python -m src.data.qa_report \
-  --metadata_csv metadata.csv \
-  --output_json reports/qa_report.json \
-  --output_csv reports/qa_records.csv \
-  --fixed_duration 4.0 \
-  --compute_snr \
-  --max_files 200
-```
-Use this report as a sanity check only; it does not change your data. Values will vary by dataset, and the SNR estimate is a simple proxy (not a full denoising step).
 
 ## Outputs
 - `results/summary.csv`: aggregated metrics per run (and per device when enabled).
