@@ -8,7 +8,6 @@ Supports:
     - BCEWithLogitsLoss with optional (auto) positive-class weighting.
     - Split-specific device/position filters (train/val/test).
     - Optional per-device test evaluation.
-    - Optional patient-level MIL with attention pooling.
     - Early stopping on validation F1_pos.
     - Gradient accumulation and LR scheduling.
     - Eval-only checkpoint evaluation (no retraining).
@@ -29,8 +28,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
-from src.datasets.pcg_dataset import PCGDataset, PCGBagDataset, bag_collate_fn, ef_to_label
-from src.models.models import BACKBONE_CONFIGS, MILModel, create_model
+from src.datasets.pcg_dataset import PCGDataset, ef_to_label
+from src.models.models import BACKBONE_CONFIGS, create_model
 from src.utils.metrics import compute_binary_metrics, format_metrics, sigmoid_probs, tune_threshold
 
 
@@ -159,23 +158,6 @@ def parse_args() -> argparse.Namespace:
         default="global",
         choices=["global", "none"],
         help="Normalization strategy for on-the-fly features.",
-    )
-    parser.add_argument(
-        "--mil",
-        action="store_true",
-        help="Use patient-level MIL with attention pooling (bag of recordings).",
-    )
-    parser.add_argument(
-        "--mil_attn_hidden",
-        type=int,
-        default=None,
-        help="Hidden dimension for MIL attention (default: feature dim).",
-    )
-    parser.add_argument(
-        "--mil_attn_dropout",
-        type=float,
-        default=0.0,
-        help="Dropout applied after MIL pooling (default: 0.0).",
     )
     parser.add_argument(
         "--device_filter",
@@ -407,9 +389,6 @@ def apply_checkpoint_args(args: argparse.Namespace, ckpt_args: dict) -> None:
     if not ckpt_args:
         return
     override_fields = [
-        "mil",
-        "mil_attn_hidden",
-        "mil_attn_dropout",
         "representation",
         "backbone",
         "image_size",
@@ -562,14 +541,6 @@ def _unbatch_meta(meta):
     return []
 
 
-def _split_batch(batch, mil: bool):
-    if mil:
-        bags, labels, mask, meta = batch
-        return bags, labels, mask, meta
-    imgs, labels, meta = batch
-    return imgs, labels, None, meta
-
-
 def save_predictions_csv(
     out_path: str,
     logits: np.ndarray,
@@ -608,7 +579,7 @@ def save_predictions_csv(
 # Data
 # --------------------------------------------------------------------------- #
 def describe_labels(name: str, dataset) -> None:
-    df = dataset.patient_df if hasattr(dataset, "patient_df") else dataset.df
+    df = dataset.df
     if "label" in df.columns:
         labels = pd.to_numeric(df["label"], errors="coerce").dropna().astype(int)
     else:
@@ -657,8 +628,7 @@ def build_datasets(args, mean: float = None, std: float = None):
 
     if args.normalization != "none" and (mean is None or std is None):
         raise ValueError("Mean/std must be provided for on-the-fly features.")
-    dataset_cls = PCGBagDataset if args.mil else PCGDataset
-    train_ds = dataset_cls(
+    train_ds = PCGDataset(
         csv_path=args.train_csv,
         representation=args.representation,
         mean=mean,
@@ -669,7 +639,7 @@ def build_datasets(args, mean: float = None, std: float = None):
         sample_rate=args.sample_rate,
         fixed_duration=args.fixed_duration,
     )
-    val_ds = dataset_cls(
+    val_ds = PCGDataset(
         csv_path=args.val_csv,
         representation=args.representation,
         mean=mean,
@@ -680,7 +650,7 @@ def build_datasets(args, mean: float = None, std: float = None):
         sample_rate=args.sample_rate,
         fixed_duration=args.fixed_duration,
     )
-    test_ds = dataset_cls(
+    test_ds = PCGDataset(
         csv_path=args.test_csv,
         representation=args.representation,
         mean=mean,
@@ -711,7 +681,6 @@ def train_one_epoch(
     use_amp: bool,
     device_type: str,
     grad_accum_steps: int = 1,
-    mil: bool = False,
 ):
     model.train()
     running_loss = 0.0
@@ -721,17 +690,12 @@ def train_one_epoch(
     optimizer.zero_grad(set_to_none=True)
 
     for step, batch in enumerate(tqdm(loader, desc="Train", leave=False)):
-        inputs, labels, mask, _ = _split_batch(batch, mil)
+        inputs, labels, _ = batch
         inputs = inputs.to(device, non_blocking=True)
         labels = labels.float().to(device, non_blocking=True)
-        if mask is not None:
-            mask = mask.to(device, non_blocking=True)
 
         with get_autocast(device_type, use_amp):
-            if mil:
-                logits, _ = model(inputs, mask=mask)
-            else:
-                logits = model(inputs).squeeze(-1)
+            logits = model(inputs).squeeze(-1)
             raw_loss = criterion(logits, labels)
 
         if not torch.isfinite(raw_loss):
@@ -771,7 +735,6 @@ def evaluate(
     threshold: float,
     use_amp: bool,
     device_type: str,
-    mil: bool = False,
     return_arrays: bool = False,
 ):
     model.eval()
@@ -781,17 +744,12 @@ def evaluate(
     all_meta = []
     with torch.no_grad():
         for batch in tqdm(loader, desc="Eval", leave=False):
-            inputs, labels, mask, meta = _split_batch(batch, mil)
+            inputs, labels, meta = batch
             inputs = inputs.to(device, non_blocking=True)
             labels = labels.to(device, non_blocking=True)
-            if mask is not None:
-                mask = mask.to(device, non_blocking=True)
 
             with get_autocast(device_type, use_amp):
-                if mil:
-                    logits, _ = model(inputs, mask=mask)
-                else:
-                    logits = model(inputs).squeeze(-1)
+                logits = model(inputs).squeeze(-1)
             all_logits.append(logits.cpu())
             all_labels.append(labels.cpu())
             if return_arrays:
@@ -825,10 +783,7 @@ def evaluate_by_device(
     batch_size: int,
     num_workers: int,
     pin_memory: bool,
-    mil: bool = False,
 ):
-    if mil:
-        return {}
     if "device" not in test_ds.df.columns:
         return {}
 
@@ -853,7 +808,6 @@ def evaluate_by_device(
             threshold=threshold,
             use_amp=use_amp,
             device_type=device_type,
-            mil=mil,
             return_arrays=False,
         )
         device_metrics[device_name] = metrics
@@ -923,9 +877,6 @@ def save_run_outputs(
         "fixed_duration": args.fixed_duration,
         "image_size": args.image_size,
         "normalization": args.normalization,
-        "mil": args.mil,
-        "mil_attn_hidden": args.mil_attn_hidden,
-        "mil_attn_dropout": args.mil_attn_dropout,
         "pos_weight": args.pos_weight if args.pos_weight is not None else np.nan,
         "auto_pos_weight": args.auto_pos_weight,
         "amp": args.amp,
@@ -978,9 +929,6 @@ def main():
             )
         checkpoint = torch.load(args.checkpoint_path, map_location="cpu")
         apply_checkpoint_args(args, checkpoint.get("args", {}))
-    if args.mil and args.per_device_eval:
-        print("Warning: --per_device_eval is not supported with --mil; disabling.")
-        args.per_device_eval = False
     set_seed(args.seed, deterministic=args.deterministic)
 
     device = get_device()
@@ -1036,7 +984,6 @@ def main():
     if args.deterministic:
         generator = torch.Generator()
         generator.manual_seed(args.seed)
-    collate_fn = bag_collate_fn if args.mil else None
     train_loader = DataLoader(
         train_ds,
         batch_size=args.batch_size,
@@ -1045,7 +992,6 @@ def main():
         pin_memory=use_pin_memory,
         worker_init_fn=worker_init_fn,
         generator=generator,
-        collate_fn=collate_fn,
     )
     val_loader = DataLoader(
         val_ds,
@@ -1055,7 +1001,6 @@ def main():
         pin_memory=use_pin_memory,
         worker_init_fn=worker_init_fn,
         generator=generator,
-        collate_fn=collate_fn,
     )
     test_loader = DataLoader(
         test_ds,
@@ -1065,18 +1010,8 @@ def main():
         pin_memory=use_pin_memory,
         worker_init_fn=worker_init_fn,
         generator=generator,
-        collate_fn=collate_fn,
     )
-
-    if args.mil:
-        model = MILModel(
-            backbone=args.backbone,
-            pretrained=True,
-            attn_hidden=args.mil_attn_hidden,
-            attn_dropout=args.mil_attn_dropout,
-        )
-    else:
-        model = create_model(backbone=args.backbone, pretrained=True, num_classes=1)
+    model = create_model(backbone=args.backbone, pretrained=True, num_classes=1)
     model.to(device)
 
     if args.eval_only:
@@ -1101,7 +1036,6 @@ def main():
                 threshold=tuned_threshold,
                 use_amp=use_amp,
                 device_type=amp_device_type,
-                mil=args.mil,
                 return_arrays=True,
             )
             save_predictions_csv(
@@ -1121,7 +1055,6 @@ def main():
                 threshold=tuned_threshold,
                 use_amp=use_amp,
                 device_type=amp_device_type,
-                mil=args.mil,
                 return_arrays=True,
             )
             save_predictions_csv(
@@ -1141,7 +1074,6 @@ def main():
                 threshold=tuned_threshold,
                 use_amp=use_amp,
                 device_type=amp_device_type,
-                mil=args.mil,
                 return_arrays=False,
             )
             test_metrics = evaluate(
@@ -1151,7 +1083,6 @@ def main():
                 threshold=tuned_threshold,
                 use_amp=use_amp,
                 device_type=amp_device_type,
-                mil=args.mil,
                 return_arrays=False,
             )
 
@@ -1167,7 +1098,6 @@ def main():
                 batch_size=args.batch_size,
                 num_workers=args.num_workers,
                 pin_memory=use_pin_memory,
-                mil=args.mil,
             )
             for device_name, metrics in test_metrics_by_device.items():
                 print(f"Test metrics [{device_name}]:", format_metrics(metrics))
@@ -1196,8 +1126,7 @@ def main():
         if args.pos_weight is not None:
             print("Warning: --auto_pos_weight ignored because --pos_weight is set.")
         else:
-            weight_df = train_ds.patient_df if args.mil and hasattr(train_ds, "patient_df") else train_ds.df
-            computed, n_pos, n_neg = compute_pos_weight_from_df(weight_df)
+            computed, n_pos, n_neg = compute_pos_weight_from_df(train_ds.df)
             if computed is None:
                 print(
                     f"Warning: cannot compute pos_weight (pos={n_pos}, neg={n_neg}). "
@@ -1245,7 +1174,6 @@ def main():
             use_amp,
             device_type=amp_device_type,
             grad_accum_steps=args.grad_accum_steps,
-            mil=args.mil,
         )
         print(f"Train loss: {train_loss:.4f}")
 
@@ -1257,7 +1185,6 @@ def main():
                 threshold=args.eval_threshold,
                 use_amp=use_amp,
                 device_type=amp_device_type,
-                mil=args.mil,
                 return_arrays=True,
             )
             tuned_threshold, val_metrics = tune_threshold(
@@ -1272,7 +1199,6 @@ def main():
                 threshold=args.eval_threshold,
                 use_amp=use_amp,
                 device_type=amp_device_type,
-                mil=args.mil,
                 return_arrays=False,
             )
         print("Val metrics:", format_metrics(val_metrics))
@@ -1339,7 +1265,6 @@ def main():
             threshold=tuned_threshold,
             use_amp=use_amp,
             device_type=amp_device_type,
-            mil=args.mil,
             return_arrays=True,
         )
         save_predictions_csv(
@@ -1359,7 +1284,6 @@ def main():
             threshold=tuned_threshold,
             use_amp=use_amp,
             device_type=amp_device_type,
-            mil=args.mil,
             return_arrays=True,
         )
         save_predictions_csv(
@@ -1379,7 +1303,6 @@ def main():
             threshold=tuned_threshold,
             use_amp=use_amp,
             device_type=amp_device_type,
-            mil=args.mil,
             return_arrays=False,
         )
     print(f"Test metrics (threshold={tuned_threshold:.3f}):", format_metrics(test_metrics))
@@ -1396,7 +1319,6 @@ def main():
             batch_size=args.batch_size,
             num_workers=args.num_workers,
             pin_memory=use_pin_memory,
-            mil=args.mil,
         )
         for device_name, metrics in test_metrics_by_device.items():
             print(f"Test metrics [{device_name}]:", format_metrics(metrics))

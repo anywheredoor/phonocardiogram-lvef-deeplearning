@@ -18,7 +18,7 @@ Final Year Project, Bachelor of Biomedical Sciences, Li Ka Shing Faculty of Medi
 - [Colab](#colab)
 
 ## Project Summary
-This project builds a phonocardiogram-based (PCG-based) screening model for reduced LVEF (binary classification: EF <= 40% vs > 40%) using recordings from iPhone, Android, and digital stethoscope devices. The core comparisons are (1) MFCC vs gammatone time-frequency representations and (2) lightweight CNNs vs SwinV2 backbones, with emphasis on within-device performance, cross-device generalization, and pooled-device training. An optional patient-level MIL (attention pooling) variant is available for patient-level predictions.
+This project builds a phonocardiogram-based (PCG-based) screening model for reduced LVEF (binary classification: EF <= 40% vs > 40%) using recordings from iPhone, Android, and digital stethoscope devices. The core comparisons are (1) MFCC vs gammatone time-frequency representations and (2) lightweight CNNs vs SwinV2 backbones, with emphasis on within-device performance, cross-device generalization, and pooled-device training.
 
 ## Repository Structure
 - `src/data`: metadata, splits, stats, QA.
@@ -51,7 +51,6 @@ Audio is resampled to 2000 Hz, band-pass filtered to 20-800 Hz, then center-crop
 2. Run within-device CV for model selection (F1_pos as the primary metric).
 3. Train one final model per device using the selected config, then evaluate cross-device performance using the saved checkpoints (no retraining).
 4. Train one pooled model using the best config from within-device results and report overall + per-device metrics.
-5. (Optional) Run patient-level MIL using bags of recordings per patient and attention pooling.
 
 ## Command Reference
 ```bash
@@ -91,7 +90,6 @@ python -m src.experiments.run_cv \
 # Optional: add --train_device_filter/--val_device_filter/--test_device_filter
 # (set all three to the same device) for within-device CV.
 # For SwinV2 or EfficientNetV2-S, also set --image_size (256 or 384).
-# Optional: add --mil for patient-level MIL pooling.
 
 # 6) Train a final model (within-device or pooled)
 python -m src.training.train \
@@ -108,7 +106,6 @@ python -m src.training.train \
   --amp \
   --save_predictions \
   --results_dir results
-# Optional: add --mil to switch to patient-level attention pooling.
 # Optional: omit device filters for pooled training.
 
 # 7) Cross-device evaluation using the saved checkpoint (no retraining)
@@ -134,7 +131,6 @@ python -m src.training.train \
 - `run_cv` computes TF stats per fold by default; disable with `--skip_compute_stats`.
 - Input size per backbone: 224x224 for MobileNet and EfficientNet-B0, 256x256 for SwinV2-Tiny/Small, and 384x384 for EfficientNetV2-S (matches pretrained configs for more stable transfer).
 - Save predictions only for final selected models to keep output size manageable.
-- `--mil` switches to patient-level bags (one prediction per patient). Per-device eval is disabled for MIL.
 - Splits: final train/val/test is 65/15/20 (patient-level). CV folds are 72/8/20 per fold (val is 10% of the remaining 80%), using a larger test set for a stable estimate.
 
 ## Default Hyperparameters
@@ -155,9 +151,6 @@ Defaults from `src/training/train.py` (unless overridden in the notebook or CLI)
 - `amp`: off by default (enable with `--amp`)
 - `auto_pos_weight`: off by default (enable with `--auto_pos_weight`)
 - `tune_threshold`: off by default (enable with `--tune_threshold`)
-- `mil`: off by default (enable with `--mil`)
-- `mil_attn_hidden`: None (defaults to feature dim)
-- `mil_attn_dropout`: 0.0
 
 ## Study Design (Dissertation Workflow)
 Within-device model selection runs 3 devices x 2 representations x 6 backbones (36 configs) with 5-fold CV. After selecting the best config per device, train one final checkpoint per device for cross-device evaluation (3 training runs). Cross-device evaluation uses those checkpoints to test on the other devices (6 eval-only runs). A pooled model is trained once using the best within-device config and reported overall and per-device.
