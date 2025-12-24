@@ -135,6 +135,7 @@ python -m src.training.train \
 - Input size per backbone: 224x224 for MobileNet and EfficientNet-B0, 256x256 for SwinV2-Tiny/Small, and 384x384 for EfficientNetV2-S (matches pretrained configs for more stable transfer).
 - Save predictions only for final selected models to keep output size manageable.
 - `--mil` switches to patient-level bags (one prediction per patient). Per-device eval is disabled for MIL.
+- Splits: final train/val/test is 65/15/20 (patient-level). CV folds are 72/8/20 per fold (val is 10% of the remaining 80%), using a larger test set for a stable estimate.
 
 ## Default Hyperparameters
 Defaults from `src/training/train.py` (unless overridden in the notebook or CLI):
