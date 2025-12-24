@@ -288,9 +288,9 @@ class PCGDataset(Dataset):
     # -------------------------------------------------------------------------
     # Dataset protocol
     # -------------------------------------------------------------------------
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int, Dict[str, Any]]:
-        row = self.df.iloc[idx]
-
+    def _row_to_example(
+        self, row: pd.Series
+    ) -> Tuple[torch.Tensor, int, Dict[str, Any]]:
         path = row["path"]
         patient_id = str(row["patient_id"])
         device = row["device"]
@@ -318,3 +318,101 @@ class PCGDataset(Dataset):
             meta["filename"] = row["filename"]
 
         return img, label, meta
+
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int, Dict[str, Any]]:
+        row = self.df.iloc[idx]
+        return self._row_to_example(row)
+
+
+class PCGBagDataset(PCGDataset):
+    """
+    Patient-level dataset for MIL-style pooling.
+
+    Each item is a bag of recordings from the same patient:
+    - bag: Tensor [N, 3, H, W]
+    - label: binary patient label
+    - meta: patient_id and bag summary
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        grouped = self.df.groupby("patient_id", sort=True)
+        label_counts = grouped["label"].nunique()
+        conflicts = label_counts[label_counts > 1]
+        if not conflicts.empty:
+            raise ValueError(
+                "Conflicting labels within patient_id group; "
+                "patient-level MIL requires consistent labels."
+            )
+
+        self.patient_ids = grouped.size().index.tolist()
+        self.bag_indices = {
+            pid: sorted(idx_list)
+            for pid, idx_list in grouped.indices.items()
+        }
+        self.patient_df = grouped[["label", "ef"]].first().reset_index()
+
+    def __len__(self) -> int:
+        return len(self.patient_ids)
+
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int, Dict[str, Any]]:
+        patient_id = self.patient_ids[idx]
+        row_indices = self.bag_indices[patient_id]
+        if not row_indices:
+            raise ValueError(f"No recordings found for patient_id={patient_id}")
+
+        imgs = []
+        devices = []
+        positions = []
+
+        label = None
+        for row_idx in row_indices:
+            row = self.df.iloc[row_idx]
+            img, row_label, meta = self._row_to_example(row)
+            imgs.append(img)
+            devices.append(meta.get("device", ""))
+            if "position" in meta:
+                positions.append(meta["position"])
+            if label is None:
+                label = row_label
+            elif label != row_label:
+                raise ValueError(
+                    f"Label mismatch within bag for patient_id={patient_id}"
+                )
+
+        bag = torch.stack(imgs, dim=0)  # [N, 3, H, W]
+        meta = {
+            "patient_id": str(patient_id),
+            "n_recordings": int(len(imgs)),
+            "device_set": ",".join(sorted(set(devices))),
+        }
+        if positions:
+            meta["position_set"] = ",".join(sorted(set(positions)))
+        return bag, int(label), meta
+
+
+def bag_collate_fn(batch):
+    """
+    Collate variable-length bags into padded tensors.
+
+    Returns:
+        bags: [B, Nmax, 3, H, W]
+        labels: [B]
+        mask: [B, Nmax] (True where valid)
+        metas: list of dicts
+    """
+    bags, labels, metas = zip(*batch)
+    max_len = max(bag.shape[0] for bag in bags)
+    batch_size = len(bags)
+    c, h, w = bags[0].shape[1:]
+
+    padded = bags[0].new_zeros((batch_size, max_len, c, h, w))
+    mask = torch.zeros((batch_size, max_len), dtype=torch.bool)
+    for i, bag in enumerate(bags):
+        n = bag.shape[0]
+        padded[i, :n] = bag
+        mask[i, :n] = True
+
+    labels = torch.tensor(labels, dtype=torch.float32)
+    return padded, labels, mask, list(metas)

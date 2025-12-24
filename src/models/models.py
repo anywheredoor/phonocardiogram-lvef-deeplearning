@@ -14,6 +14,7 @@ Supported backbones (ImageNet-pretrained via timm):
 from typing import Dict
 
 import timm
+import torch
 import torch.nn as nn
 
 # Map friendly names to timm model identifiers
@@ -54,3 +55,67 @@ def create_model(
         num_classes=num_classes,
     )
     return model
+
+
+class MILAttentionPool(nn.Module):
+    """Gated attention pooling for MIL bags."""
+
+    def __init__(self, in_dim: int, hidden_dim: int = None, dropout: float = 0.0):
+        super().__init__()
+        hidden_dim = hidden_dim or in_dim
+        self.attn_v = nn.Linear(in_dim, hidden_dim)
+        self.attn_u = nn.Linear(in_dim, hidden_dim)
+        self.attn_w = nn.Linear(hidden_dim, 1)
+        self.dropout = nn.Dropout(dropout) if dropout > 0 else None
+
+    def forward(self, feats: torch.Tensor, mask: torch.Tensor = None):
+        # feats: [B, N, D]
+        attn_v = torch.tanh(self.attn_v(feats))
+        attn_u = torch.sigmoid(self.attn_u(feats))
+        scores = self.attn_w(attn_v * attn_u).squeeze(-1)  # [B, N]
+        if mask is not None:
+            scores = scores.masked_fill(~mask, float("-inf"))
+        attn = torch.softmax(scores, dim=1)
+        pooled = torch.sum(attn.unsqueeze(-1) * feats, dim=1)
+        if self.dropout is not None:
+            pooled = self.dropout(pooled)
+        return pooled, attn
+
+
+class MILModel(nn.Module):
+    """Backbone feature extractor + attention pooling head."""
+
+    def __init__(
+        self,
+        backbone: str = "mobilenetv2",
+        pretrained: bool = True,
+        attn_hidden: int = None,
+        attn_dropout: float = 0.0,
+    ):
+        super().__init__()
+        if backbone not in BACKBONE_CONFIGS:
+            raise ValueError(
+                f"Unknown backbone '{backbone}'. Available: {list(BACKBONE_CONFIGS.keys())}"
+            )
+        model_name = BACKBONE_CONFIGS[backbone]
+        self.backbone = timm.create_model(
+            model_name,
+            pretrained=pretrained,
+            in_chans=3,
+            num_classes=0,
+            global_pool="avg",
+        )
+        feat_dim = self.backbone.num_features
+        self.pool = MILAttentionPool(
+            in_dim=feat_dim, hidden_dim=attn_hidden, dropout=attn_dropout
+        )
+        self.classifier = nn.Linear(feat_dim, 1)
+
+    def forward(self, bags: torch.Tensor, mask: torch.Tensor = None):
+        # bags: [B, N, C, H, W]
+        bsz, n_inst, c, h, w = bags.shape
+        feats = self.backbone(bags.view(bsz * n_inst, c, h, w))
+        feats = feats.view(bsz, n_inst, -1)
+        pooled, attn = self.pool(feats, mask=mask)
+        logits = self.classifier(pooled).squeeze(-1)
+        return logits, attn
