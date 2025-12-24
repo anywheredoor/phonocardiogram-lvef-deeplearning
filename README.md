@@ -17,7 +17,7 @@ Final Year Project, Bachelor of Biomedical Sciences, Li Ka Shing Faculty of Medi
 - [Colab](#colab)
 
 ## Project Summary
-This project builds a phonocardiogram-based screening model for reduced left ventricular ejection fraction (binary classification: ejection fraction <= 40% vs > 40%) using recordings from iPhone, Android, and digital stethoscope devices. The core comparisons are mel-frequency cepstral coefficients (MFCC) versus gammatone time-frequency representations and lightweight convolutional neural networks (CNNs) versus Swin Transformer backbones, with emphasis on within-device, cross-device, and pooled-device performance.
+This project builds a phonocardiogram-based screening model for reduced left ventricular ejection fraction (binary classification: ejection fraction <= 40% vs > 40%) using recordings from iPhone, Android, and digital stethoscope devices. The core comparisons are mel-frequency cepstral coefficients (MFCC) versus gammatone time-frequency representations and lightweight convolutional neural networks (CNNs) versus Swin Transformers, with emphasis on within-device, cross-device, and pooled-device performance.
 
 ## Repository Structure
 - `src/data`: metadata, splits, stats, QA.
