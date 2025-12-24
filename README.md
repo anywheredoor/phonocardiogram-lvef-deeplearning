@@ -187,7 +187,7 @@ Defaults from `src/training/train.py` (unless overridden in the notebook or CLI)
 Use `colab_pipeline.ipynb` for a guided end-to-end run on Google Colab.
 
 ## Preliminary Experiments
-These preliminary experiments informed the research scope for this project:
+These preliminary experiments helped define the research scope for this project:
 - [Multi-Task vs Single-Task Modeling for PCG Analysis](https://github.com/anywheredoor/pcg_experiment_1)
 - [PCG-Only Baseline for Reduced LVEF Detection (ViT-B/16)](https://github.com/anywheredoor/pcg_experiment_2)
 - [Phonocardiogram MIL Pipeline for Reduced LVEF Screening](https://github.com/anywheredoor/pcg_experiment_3)
