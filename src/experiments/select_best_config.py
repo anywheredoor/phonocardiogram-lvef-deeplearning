@@ -2,6 +2,7 @@
 """
 Select the best config per device from results/summary.csv.
 
+Rows without a train_device_filter (e.g., pooled runs) are ignored.
 By default, ranks configs by mean test F1_pos, then mean AUPRC, then AUROC.
 """
 
@@ -102,6 +103,10 @@ def main() -> None:
         df = df[df["metric_scope"] == args.metric_scope]
 
     df = _filter_eval_only(df, args.include_eval_only)
+
+    if "train_device_filter" in df.columns:
+        device_col = df["train_device_filter"].fillna("").astype(str).str.strip()
+        df = df[device_col != ""]
 
     if not args.allow_cross_device:
         _require_columns(
