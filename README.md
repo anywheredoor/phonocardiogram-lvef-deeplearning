@@ -18,7 +18,7 @@ Final Year Project, Bachelor of Biomedical Sciences, Li Ka Shing Faculty of Medi
 - [Colab](#colab)
 
 ## Project Summary
-This project builds a phonocardiogram-based (PCG-based) screening model for reduced LVEF (binary classification: EF <= 40% vs > 40%) using recordings from iPhone, Android, and digital stethoscope devices. The core comparisons are (1) MFCC vs gammatone time-frequency representations and (2) lightweight CNNs vs SwinV2 backbones, with emphasis on within-device performance, cross-device generalization, and pooled-device training. An optional patient-level MIL (attention pooling) variant is supported for dissertation experiments.
+This project builds a phonocardiogram-based (PCG-based) screening model for reduced LVEF (binary classification: EF <= 40% vs > 40%) using recordings from iPhone, Android, and digital stethoscope devices. The core comparisons are (1) MFCC vs gammatone time-frequency representations and (2) lightweight CNNs vs SwinV2 backbones, with emphasis on within-device performance, cross-device generalization, and pooled-device training. An optional patient-level MIL (attention pooling) variant is available for patient-level predictions.
 
 ## Repository Structure
 - `src/data`: metadata, splits, stats, QA.
@@ -93,7 +93,7 @@ python -m src.experiments.run_cv \
 # For SwinV2 or EfficientNetV2-S, also set --image_size (256 or 384).
 # Optional: add --mil for patient-level MIL pooling.
 
-# 6) Train a final within-device model (single run)
+# 6) Train a final model (within-device or pooled)
 python -m src.training.train \
   --train_csv splits/metadata_train.csv \
   --val_csv splits/metadata_val.csv \
@@ -109,6 +109,7 @@ python -m src.training.train \
   --save_predictions \
   --results_dir results
 # Optional: add --mil to switch to patient-level attention pooling.
+# Optional: omit device filters for pooled training.
 
 # 7) Cross-device evaluation using the saved checkpoint (no retraining)
 python -m src.training.train \
