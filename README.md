@@ -15,6 +15,7 @@ Final Year Project, Bachelor of Biomedical Sciences, Li Ka Shing Faculty of Medi
 - [Default Hyperparameters](#default-hyperparameters)
 - [Outputs](#outputs)
 - [Colab](#colab)
+- [Preliminary Experiments](#preliminary-experiments)
 
 ## Project Summary
 This project builds a phonocardiogram-based screening model for reduced left ventricular ejection fraction (binary classification: ejection fraction <= 40% vs > 40%) using recordings from iPhone, Android, and digital stethoscope devices. The core comparisons are mel-frequency cepstral coefficients (MFCC) versus gammatone time-frequency representations and lightweight convolutional neural networks (CNNs) versus Swin Transformers, with emphasis on within-device, cross-device, and pooled-device performance.
@@ -184,3 +185,9 @@ Defaults from `src/training/train.py` (unless overridden in the notebook or CLI)
 
 ## Colab
 Use `colab_pipeline.ipynb` for a guided end-to-end run on Google Colab.
+
+## Preliminary Experiments
+These preliminary experiments informed the research scope for this project:
+- [Multi-Task vs Single-Task Modeling for PCG Analysis](https://github.com/anywheredoor/pcg_experiment_1)
+- [PCG-Only Baseline for Reduced LVEF Detection (ViT-B/16)](https://github.com/anywheredoor/pcg_experiment_2)
+- [Phonocardiogram MIL Pipeline for Reduced LVEF Screening](https://github.com/anywheredoor/pcg_experiment_3)
