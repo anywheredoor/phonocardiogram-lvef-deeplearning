@@ -23,6 +23,7 @@ venv/
 /checkpoints_cpu/
 /results/
 /reports/
+/progress_report/
 summary.csv
 best_config_per_device.csv
 config_summary_by_device.csv
