@@ -395,12 +395,32 @@ def apply_checkpoint_args(args: argparse.Namespace, ckpt_args: dict) -> None:
         "sample_rate",
         "fixed_duration",
         "normalization",
+        "tf_stats_json",
     ]
     for field in override_fields:
         if field not in ckpt_args:
             continue
         ckpt_value = ckpt_args[field]
         current_value = getattr(args, field, None)
+        if field == "tf_stats_json":
+            ckpt_stats_path = str(ckpt_value) if ckpt_value is not None else ""
+            current_stats_path = (
+                str(current_value) if current_value is not None else ""
+            )
+            # Old checkpoints may store environment-specific paths (e.g., Colab).
+            # If the checkpoint path is missing but the user provided a valid file,
+            # keep the user value instead of forcing a stale path.
+            if (
+                ckpt_stats_path
+                and not os.path.isfile(ckpt_stats_path)
+                and current_stats_path
+                and os.path.isfile(current_stats_path)
+            ):
+                print(
+                    "Eval-only: checkpoint tf_stats_json path is missing "
+                    f"({ckpt_stats_path}); keeping --tf_stats_json={current_stats_path}."
+                )
+                continue
         if current_value != ckpt_value:
             print(
                 f"Eval-only: overriding --{field}={current_value} "

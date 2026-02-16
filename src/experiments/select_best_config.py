@@ -51,6 +51,15 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Allow cross-device rows (train/val/test device mismatch).",
     )
+    parser.add_argument(
+        "--expected_folds",
+        type=int,
+        default=None,
+        help=(
+            "Optional exact number of runs required per grouped config. "
+            "Use 5 for standard 5-fold CV summaries."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -147,6 +156,16 @@ def main() -> None:
             ascending=[True, False, False, False],
         )
     )
+
+    if args.expected_folds is not None:
+        agg = agg[agg["folds"] == int(args.expected_folds)]
+        if agg.empty:
+            print(
+                "No grouped configs match --expected_folds="
+                f"{args.expected_folds}. Check your summary filters.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     best_rows = (
         agg.sort_values(

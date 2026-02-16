@@ -1,24 +1,34 @@
 # Deep Learning Analysis of Smartphone and Digital Stethoscope Phonocardiograms for Detection of Reduced Left Ventricular Ejection Fraction
 
-Final Year Project, Bachelor of Biomedical Sciences, Li Ka Shing Faculty of Medicine, The University of Hong Kong.
+This repository contains my final year project (Bachelor of Biomedical Sciences, Li Ka Shing Faculty of Medicine, The University of Hong Kong).
 
 ## Table of Contents
 - [Project Summary](#project-summary)
+- [Project Status](#project-status)
 - [Repository Structure](#repository-structure)
 - [Requirements](#requirements)
-- [Data and Inputs](#data-and-inputs)
+- [Reproducibility](#reproducibility)
+- [Data and Governance](#data-and-governance)
 - [QA and SNR Sanity Check](#qa-and-snr-sanity-check)
 - [Preprocessing](#preprocessing)
 - [Study Workflow](#study-workflow)
 - [Command Reference](#command-reference)
+- [Quick Smoke Test](#quick-smoke-test)
 - [Training and Evaluation Notes](#training-and-evaluation-notes)
 - [Default Hyperparameters](#default-hyperparameters)
 - [Outputs](#outputs)
+- [Citation](#citation)
 - [Colab](#colab)
 - [Preliminary Experiments](#preliminary-experiments)
+- [License](#license)
 
 ## Project Summary
 This project builds a phonocardiogram-based screening model for reduced left ventricular ejection fraction (binary classification: ejection fraction <= 40% vs > 40%) using recordings from iPhone, Android, and digital stethoscope devices. The core comparisons are mel-frequency cepstral coefficients (MFCC) versus gammatone time-frequency representations and lightweight convolutional neural networks (CNNs) versus Swin Transformers, with emphasis on within-device, cross-device, and pooled-device performance.
+
+## Project Status
+- This is the final dissertation release of my project.
+- I keep the code and documentation here in a reproducible, reviewable form.
+- The repository is intended for research and education, not for clinical deployment.
 
 ## Repository Structure
 - `src/data`: metadata, splits, stats, QA.
@@ -29,19 +39,50 @@ This project builds a phonocardiogram-based screening model for reduced left ven
 - `colab_pipeline.ipynb`: end-to-end Colab notebook.
 
 ## Requirements
-Python 3.10+ and packages in `requirements.txt`:
+Python 3.10+.
+
+Contributor setup (flexible ranges):
 ```bash
 pip install -r requirements.txt
 ```
-If you need GPU support, install the appropriate PyTorch build per the official PyTorch instructions.
+Dissertation/review setup (recommended; pinned):
+```bash
+pip install -r requirements-lock.txt
+```
+If you need GPU support, install a compatible PyTorch build first, then install the remaining packages.
 
-## Data and Inputs
-Expected structure:
+## Reproducibility
+For dissertation reruns and reviewer checks, I recommend using exact pinned dependencies.
+
+Tested environment for this repository:
+- Python `3.12.7`
+- torch `2.9.1`
+- torchaudio `2.9.1`
+- timm `1.0.22`
+- pandas `2.2.2`
+- numpy `1.26.4`
+- scikit-learn `1.5.1`
+- soundfile `0.13.1`
+- tqdm `4.66.5`
+- gammatone `1.0.3`
+
+Use `requirements.txt` for ongoing development, and `requirements-lock.txt` when you need strict reproducibility.
+
+## Data and Governance
+Expected local structure:
 - `heart_sounds/` with per-patient subfolders containing WAV files.
 - `lvef.csv` with columns `patient_id` and `ef`.
 - `patient_id` is treated as a string (leading zeros preserved).
 - Filename parsing is defined in `src/data/build_metadata.py` (`FILENAME_RE`, `DEVICE_MAP`); update if your naming differs.
 - Sensitive data (raw audio, labels) and derived artifacts are gitignored by default for privacy.
+
+Data availability:
+- Raw audio and linked clinical labels are private and are not distributed in this repository.
+- This repository includes code and selected derived outputs only.
+
+Study context:
+- The heart sound recordings used for this research are from the same study context registered at ClinicalTrials.gov: [NCT06070298](https://clinicaltrials.gov/study/NCT06070298).
+- Refer to the registry record for protocol-level details (eligibility, design, and timeline).
 
 ## QA and SNR Sanity Check
 Quality assurance checks create a short report so you can spot obvious data issues before training. They summarize missing files, label consistency, device counts, and recording durations. If you enable `--compute_snr`, the signal-to-noise ratio estimate compares energy inside the heart‑sound band (20–800 Hz) to energy outside it.
@@ -107,8 +148,11 @@ python -m src.experiments.run_cv \
 # For SwinV2 or EfficientNetV2-S, also set --image_size (256 or 384).
 
 # 5b) Select best config per device from CV summary
+# Important: run this on a CV-only summary table.
+# If summary.csv also includes final/eval runs, isolate CV rows first.
 python -m src.experiments.select_best_config \
   --summary_csv results/summary.csv \
+  --expected_folds 5 \
   --output_csv results/selection/best_config_per_device.csv \
   --all_csv results/selection/config_summary_by_device.csv
 
@@ -143,6 +187,28 @@ python -m src.training.train \
   --per_device_eval \
   --save_predictions \
   --results_dir results
+```
+
+## Quick Smoke Test
+This minimal run verifies that the training pipeline works end-to-end.
+It requires authorized local access to the private dataset files (`heart_sounds/` and `lvef.csv`).
+
+```bash
+python -m src.data.build_metadata --lvef_csv lvef.csv --heart_dir heart_sounds --output_csv metadata.csv
+python -m src.data.make_patient_splits --metadata_csv metadata.csv --output_dir splits
+python -m src.data.compute_stats --train_csv splits/metadata_train.csv --representations mfcc --output_json tf_stats.json
+python -m src.training.train \
+  --train_csv splits/metadata_train.csv \
+  --val_csv splits/metadata_val.csv \
+  --test_csv splits/metadata_test.csv \
+  --tf_stats_json tf_stats.json \
+  --representation mfcc \
+  --backbone mobilenetv2 \
+  --epochs 1 \
+  --num_workers 0 \
+  --results_dir results \
+  --output_dir checkpoints \
+  --run_name smoke_test
 ```
 
 ## Training and Evaluation Notes
@@ -183,6 +249,9 @@ Defaults from `src/training/train.py` (unless overridden in the notebook or CLI)
 - `results/selection/config_summary_by_device.csv`: aggregated config stats per device (generated by `select_best_config.py`).
 - `checkpoints/<run_name>/best.pth`: best checkpoint by validation F1_pos.
 
+## Citation
+Citation metadata is provided in `CITATION.cff`.
+
 ## Colab
 Use `colab_pipeline.ipynb` for a guided end-to-end run on Google Colab.
 
@@ -191,3 +260,6 @@ These preliminary experiments helped define the research scope for this project:
 - [Multi-Task vs Single-Task Modeling for PCG Analysis](https://github.com/anywheredoor/pcg_experiment_1)
 - [PCG-Only Baseline for Reduced LVEF Detection (ViT-B/16)](https://github.com/anywheredoor/pcg_experiment_2)
 - [Phonocardiogram MIL Pipeline for Reduced LVEF Screening](https://github.com/anywheredoor/pcg_experiment_3)
+
+## License
+This project is released under the Apache License 2.0. See `LICENSE`.
