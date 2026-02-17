@@ -26,7 +26,7 @@ This repository contains my final year project (Bachelor of Biomedical Sciences,
 This project builds a phonocardiogram-based screening model for reduced left ventricular ejection fraction (binary classification: ejection fraction <= 40% vs > 40%) using recordings from iPhone, Android, and digital stethoscope devices. The core comparisons are mel-frequency cepstral coefficients (MFCC) versus gammatone time-frequency representations and lightweight convolutional neural networks (CNNs) versus Swin Transformers, with emphasis on within-device, cross-device, and pooled-device performance.
 
 ## Project Status
-- This is the final dissertation release of my project.
+- This is the finalized release of my project repository.
 - I keep the code and documentation here in a reproducible, reviewable form.
 - The repository is intended for research and education, not for clinical deployment.
 
@@ -45,14 +45,14 @@ Contributor setup (flexible ranges):
 ```bash
 pip install -r requirements.txt
 ```
-Dissertation/review setup (recommended; pinned):
+Reviewer setup (recommended; pinned):
 ```bash
 pip install -r requirements-lock.txt
 ```
 If you need GPU support, install a compatible PyTorch build first, then install the remaining packages.
 
 ## Reproducibility
-For dissertation reruns and reviewer checks, I recommend using exact pinned dependencies.
+For reproducibility checks, I recommend using exact pinned dependencies.
 
 Tested environment for this repository:
 - Python `3.12.7`
@@ -106,7 +106,7 @@ Audio is resampled to 2000 Hz, band-pass filtered to 20-800 Hz, then center-crop
 3. Train one final model per device using the selected config, then evaluate cross-device performance using the saved checkpoints (no retraining).
 4. Train one pooled model using the best config from within-device results and report overall + per-device metrics.
 
-Within-device model selection runs 3 devices x 2 representations x 6 backbones (36 configs) with 5-fold CV. After selecting the best config per device, train one final checkpoint per device for cross-device evaluation (3 training runs). Cross-device evaluation uses those checkpoints to test on the other devices (6 eval-only runs). A pooled model is trained once using the best within-device config and reported overall and per-device.
+The experiment grid is 3 devices x 2 representations x 6 backbones (36 within-device configs), each with 5-fold CV. After configuration selection, I train one final checkpoint per device (3 training runs), evaluate each checkpoint on the other devices (6 eval-only runs), and train one pooled model with the selected configuration.
 
 ## Command Reference
 ```bash
