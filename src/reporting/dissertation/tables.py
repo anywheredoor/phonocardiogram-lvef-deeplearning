@@ -8,7 +8,7 @@ from typing import Dict, List
 import numpy as np
 import pandas as pd
 
-from dissertation_common import (
+from src.reporting.dissertation.common import (
     EXPERIMENT_LABELS,
     METRIC_COLS,
     _device_or_all_categorical,

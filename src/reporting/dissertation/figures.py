@@ -21,7 +21,7 @@ from sklearn.metrics import (
     roc_curve,
 )
 
-from dissertation_common import (
+from src.reporting.dissertation.common import (
     AUSCULTATION_SITE_ORDER,
     BACKBONE_LABELS,
     BACKBONE_ORDER,

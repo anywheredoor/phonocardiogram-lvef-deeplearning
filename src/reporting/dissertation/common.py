@@ -8,11 +8,11 @@ import sys
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
-_SCRIPT_DIR = Path(__file__).resolve().parent
-_REPO_ROOT = _SCRIPT_DIR.parent
+_MODULE_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
-_MPL_CACHE = _SCRIPT_DIR.parent / "reports" / ".matplotlib_cache"
+_MPL_CACHE = _REPO_ROOT / "reports" / ".matplotlib_cache"
 _MPL_CACHE.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("MPLCONFIGDIR", str(_MPL_CACHE))
 os.environ["OMP_NUM_THREADS"] = "1"
