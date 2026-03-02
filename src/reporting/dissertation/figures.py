@@ -938,7 +938,8 @@ def plot_pooled_auroc_by_auscultation_site(
     fig, ax = plt.subplots(1, 1, figsize=(7.4, 5.2), constrained_layout=True)
     point_color = "#111111"
     line_color = "#111111"
-    x = np.array([0.46, 0.90, 1.34, 1.78], dtype=float)
+    x = np.array([1.18, 1.27, 1.36, 1.45], dtype=float)
+    x_gap = float(x[1] - x[0])
 
     lower_err = plot_df["auroc"].to_numpy(dtype=float) - plot_df["auroc_ci95_low"].to_numpy(dtype=float)
     upper_err = plot_df["auroc_ci95_high"].to_numpy(dtype=float) - plot_df["auroc"].to_numpy(dtype=float)
@@ -963,11 +964,11 @@ def plot_pooled_auroc_by_auscultation_site(
     ax.set_xticklabels(plot_df["auscultation_site"].tolist(), rotation=0)
     ax.set_xlabel("Auscultation site", labelpad=10)
     ax.set_ylabel("AUROC", labelpad=12)
-    ax.set_title("Pooled-device model on pooled test set")
+    ax.set_title("Pooled-device model on pooled test set", pad=12)
 
     y_min = 0.495
     y_max = 0.855
-    ax.set_xlim(0.36, 1.88)
+    ax.set_xlim(float(x[0] - x_gap / 2.0), float(x[-1] + x_gap / 2.0))
     ax.set_ylim(y_min, y_max)
     ax.set_yticks(np.arange(0.50, 0.86, 0.05))
     ax.grid(axis="y", color="#E8E8E8", linewidth=0.85)
