@@ -107,15 +107,16 @@ def write_readme(
     lines.append("## Notes for dissertation use")
     lines.append("")
     lines.append("- Final within-device runs appear twice in `summary.csv` (`overall` and same-device `test_device`); use the `overall` row for headline tables.")
-    lines.append("- Cross-device eval runs contain one `overall` row plus one row per target device; use `table_05_*` for the six pairwise source→target results.")
-    lines.append("- Pooled-device run contains one `overall` row plus three per-device rows; use `table_07_*` depending on whether you want aggregate or per-target reporting.")
+    lines.append("- Cross-device eval runs contain one `overall` row plus one row per target device; use the metadata CSVs if you need the six pairwise source→target results later.")
+    lines.append("- Pooled-device run contains one `overall` row plus three per-device rows; use the metadata CSVs if you need aggregate or per-target reporting later.")
     lines.append("- `overall` rows are aggregate evaluations and are not guaranteed to equal the unweighted arithmetic mean of the per-device rows.")
     lines.append("")
-    lines.append("## Generated tables")
-    lines.append("")
-    for name in sorted(tables):
-        lines.append(f"- `{name}`")
-    lines.append("")
+    if tables:
+        lines.append("## Generated tables")
+        lines.append("")
+        for name in sorted(tables):
+            lines.append(f"- `{name}`")
+        lines.append("")
     lines.append("## Generated figures")
     lines.append("")
     figure_names = sorted(p.name for p in (output_dir / 'figures').glob('*.png'))
@@ -140,14 +141,7 @@ def generate_outputs(summary_csv: str, output_dir: str, dpi: int, results_run_di
     backbone_param_df = compute_backbone_parameter_table()
 
     tables = build_summary_tables(df=views['all_rows'], run_catalog=run_catalog, views=views, cv_agg=cv_agg, cv_best=cv_best)
-    table_keep = {
-        'table_02_cv_aggregated_config_metrics_by_training_device.csv',
-        'table_03_cv_best_config_per_device.csv',
-        'table_04_final_within_device_overall_results.csv',
-        'table_05_cross_device_pairwise_results_source_to_target.csv',
-        'table_07_pooled_device_results_overall_and_per_device.csv',
-    }
-    tables = {k: v for k, v in tables.items() if k in table_keep}
+    tables = {}
 
     _save_csv(run_catalog, metadata_dir / 'run_catalog_classified_from_summary.csv')
     _save_csv(views['all_rows'], metadata_dir / 'summary_rows_with_run_kind.csv')
