@@ -119,10 +119,12 @@ flowchart TB
     B --> B2["Evaluate on Digital stethoscope"]
     C["Best-config within-device model trained on Digital stethoscope"] --> C1["Evaluate on iPhone"]
     C --> C2["Evaluate on Android phone"]
-    A2 --> B
-    B2 --> C
-    linkStyle 6 stroke-width:0px,fill:none;
-    linkStyle 7 stroke-width:0px,fill:none;
+    A ~~~ B
+    B ~~~ C
+    A1 ~~~ B1
+    B1 ~~~ C1
+    A2 ~~~ B2
+    B2 ~~~ C2
 ```
 
 ### Pooled-device workflow
