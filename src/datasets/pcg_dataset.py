@@ -248,7 +248,7 @@ class PCGDataset(Dataset):
 
         return spec
 
-    def _spec_to_image(self, spec: torch.Tensor, device: str) -> torch.Tensor:
+    def _spec_to_image(self, spec: torch.Tensor) -> torch.Tensor:
         """
         Convert [freq, time] spec to (3, image_size, image_size) tensor.
 
@@ -304,7 +304,7 @@ class PCGDataset(Dataset):
         waveform = self._fix_length(waveform)
 
         spec = self._to_tf_representation(waveform)
-        img = self._spec_to_image(spec, device=device)
+        img = self._spec_to_image(spec)
 
         meta = {
             "patient_id": patient_id,

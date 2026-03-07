@@ -2,36 +2,49 @@
 .DS_Store
 .idea/
 .vscode/
+.ipynb_checkpoints/
+
+# Python caches / local tooling
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Environments
+# Environments / local packaging
 .env
 .venv/
 venv/
+build/
+dist/
+*.egg-info/
 
-# Data and labels (sensitive)
+# Sensitive local data
 /heart_sounds/
 /lvef.csv
+/summary.csv
 /metadata.csv
+/metadata*.csv
 /tf_stats.json
+/tf_stats*.json
 
-# Derived artifacts
+# Derived local artifacts
 /splits/
 /checkpoints/
 /checkpoints_cpu/
 /results/
 /reports/
 /progress_report/
-summary.csv
-best_config_per_device.csv
-config_summary_by_device.csv
+/best_config_per_device.csv
+/config_summary_by_device.csv
 
 # Model weights / tensors
 *.pth
 *.pt
 *.ckpt
 
-# Misc
+# Logs
 *.log

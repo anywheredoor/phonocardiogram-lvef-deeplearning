@@ -1,139 +1,85 @@
 # Deep Learning Analysis of Smartphone and Digital Stethoscope Phonocardiograms for Detection of Reduced Left Ventricular Ejection Fraction
 
-This repository contains my final year project (Bachelor of Biomedical Sciences, Li Ka Shing Faculty of Medicine, The University of Hong Kong).
+This repository contains the code used for a final-year research project on phonocardiogram-based detection of reduced left ventricular ejection fraction (LVEF).
 
-## Table of Contents
-- [Project Summary](#project-summary)
-- [Project Status](#project-status)
-- [Repository Structure](#repository-structure)
-- [Requirements](#requirements)
-- [Reproducibility](#reproducibility)
-- [Data and Governance](#data-and-governance)
-- [QA and SNR Sanity Check](#qa-and-snr-sanity-check)
-- [Preprocessing](#preprocessing)
-- [Study Workflow](#study-workflow)
-- [Command Reference](#command-reference)
-- [Quick Smoke Test](#quick-smoke-test)
-- [Training and Evaluation Notes](#training-and-evaluation-notes)
-- [Default Hyperparameters](#default-hyperparameters)
-- [Outputs](#outputs)
-- [Citation](#citation)
-- [Colab](#colab)
-- [Preliminary Experiments](#preliminary-experiments)
-- [License](#license)
+The study compares:
+- device-specific versus pooled-device training
+- within-device versus cross-device generalization
+- MFCC versus gammatone representations
+- lightweight CNN backbones versus Swin Transformer backbones
 
-## Project Summary
-This project builds a phonocardiogram-based screening model for reduced left ventricular ejection fraction (binary classification: ejection fraction <= 40% vs > 40%) using recordings from iPhone, Android, and digital stethoscope devices. The core comparisons are mel-frequency cepstral coefficients (MFCC) versus gammatone time-frequency representations and lightweight convolutional neural networks (CNNs) versus Swin Transformers, with emphasis on within-device, cross-device, and pooled-device performance.
+The task is binary classification: reduced LVEF (`EF <= 40%`) versus non-reduced LVEF (`EF > 40%`).
 
-## Project Status
-- This is the finalized release of my project repository.
-- I keep the code and documentation here in a reproducible, reviewable form.
-- The repository is intended for research and education, not for clinical deployment.
+## Scope
+- Research code only
+- No raw audio or linked clinical labels are distributed here
+- Not intended for clinical deployment
 
-## Repository Structure
-- `src/data`: metadata, splits, stats, QA.
-- `src/datasets`: on-the-fly datasets.
-- `src/models`: backbone factory.
-- `src/training`: training entry point.
-- `src/experiments`: CV runner + config selection.
-- `colab_pipeline.ipynb`: end-to-end Colab notebook.
+## Repository Layout
+- `src/data/`: metadata building, split generation, quality checks, feature-statistics utilities
+- `src/datasets/`: dataset loading and on-the-fly time-frequency feature generation
+- `src/models/`: model factory and backbone definitions
+- `src/training/`: training and evaluation entrypoint
+- `src/experiments/`: cross-validation runner and best-configuration selection
+- `src/reporting/dissertation/`: dissertation figure/table generation utilities
+- `scripts/make_dissertation_outputs.py`: dissertation reporting entrypoint
+- `colab_pipeline.ipynb`: notebook workflow used for the main experiments
 
-## Requirements
-Python 3.10+.
+## Setup
+Python 3.10+ is recommended.
 
-Contributor setup (flexible ranges):
+Flexible dependency install:
 ```bash
 pip install -r requirements.txt
 ```
-Reviewer setup (recommended; pinned):
+
+Pinned dependency install for stricter reproduction:
 ```bash
 pip install -r requirements-lock.txt
 ```
+
 If you need GPU support, install a compatible PyTorch build first, then install the remaining packages.
 
-## Reproducibility
-For reproducibility checks, I recommend using exact pinned dependencies.
+## Private Data
+This repository expects local access to private study data, but those files are intentionally excluded from version control.
 
-Tested environment for this repository:
-- Python `3.12.7`
-- torch `2.9.1`
-- torchaudio `2.9.1`
-- timm `1.0.22`
-- pandas `2.2.2`
-- numpy `1.26.4`
-- scikit-learn `1.5.1`
-- soundfile `0.13.1`
-- tqdm `4.66.5`
-- gammatone `1.0.3`
+Expected local inputs:
+- `heart_sounds/` with per-patient WAV files
+- `lvef.csv` with `patient_id` and `ef`
 
-Use `requirements.txt` for ongoing development, and `requirements-lock.txt` when you need strict reproducibility.
+The following are gitignored by default:
+- raw audio and label files
+- generated metadata and split files
+- checkpoints, results, and reports
+- dissertation summary outputs and other derived artifacts
 
-## Data and Governance
-Expected local structure:
-- `heart_sounds/` with per-patient subfolders containing WAV files.
-- `lvef.csv` with columns `patient_id` and `ef`.
-- `patient_id` is treated as a string (leading zeros preserved).
-- Filename parsing is defined in `src/data/build_metadata.py` (`FILENAME_RE`, `DEVICE_MAP`); update if your naming differs.
-- Sensitive data (raw audio, labels) and derived artifacts are gitignored by default for privacy.
-
-Data availability:
-- Raw audio and linked clinical labels are private and are not distributed in this repository.
-- This repository includes code and selected derived outputs only.
-
-Study context:
-- The heart sound recordings used for this research are from the same study context registered at ClinicalTrials.gov: [NCT06070298](https://clinicaltrials.gov/study/NCT06070298).
-- Refer to the registry record for protocol-level details (eligibility, design, and timeline).
-
-## QA and SNR Sanity Check
-Quality assurance checks create a short report so you can spot obvious data issues before training. They summarize missing files, label consistency, device counts, and recording durations. If you enable `--compute_snr`, the signal-to-noise ratio estimate compares energy inside the heart‑sound band (20–800 Hz) to energy outside it.
+## Typical Workflow
+Build metadata:
 ```bash
-python -m src.data.qa_report \
-  --metadata_csv metadata.csv \
-  --output_json reports/qa_report.json \
-  --output_csv reports/qa_records.csv \
-  --fixed_duration 4.0 \
-  --compute_snr \
-  --max_files 200
-```
-Use this report as a sanity check only; it does not change your data. Values will vary by dataset, and the SNR estimate is a simple proxy (not a full denoising step).
-
-## Preprocessing
-Audio is resampled to 2000 Hz, band-pass filtered to 20-800 Hz, then center-cropped or zero-padded to 4.0 s. Each waveform is converted to MFCC or gammatone, resized to the model input size, repeated to 3 channels, and normalized using training-split statistics (single-set for the chosen subset). These steps are identical across devices to avoid leakage.
-
-## Study Workflow
-1. Build `metadata.csv`, then create patient-level splits and 5-fold CV splits to avoid leakage.
-2. Run within-device CV for model selection (F1_pos as the primary metric), then summarise configs with `select_best_config.py`.
-3. Train one final model per device using the selected config, then evaluate cross-device performance using the saved checkpoints (no retraining).
-4. Train one pooled model using the best config from within-device results and report overall + per-device metrics.
-
-The experiment grid is 3 devices x 2 representations x 6 backbones (36 within-device configs), each with 5-fold CV. After configuration selection, I train one final checkpoint per device (3 training runs), evaluate each checkpoint on the other devices (6 eval-only runs), and train one pooled model with the selected configuration.
-
-## Command Reference
-```bash
-# 1) Build metadata
 python -m src.data.build_metadata \
   --lvef_csv lvef.csv \
   --heart_dir heart_sounds \
   --output_csv metadata.csv
+```
 
-# 2) Patient-level, stratified splits (for final within-device checkpoint)
+Create final train/validation/test splits:
+```bash
 python -m src.data.make_patient_splits \
   --metadata_csv metadata.csv \
   --output_dir splits
+```
 
-# 3) Patient-level CV splits (default: 5-fold)
+Create patient-level CV folds:
+```bash
 python -m src.data.make_patient_cv_splits \
   --metadata_csv metadata.csv \
   --output_dir splits/cv \
   --n_splits 5 \
   --n_repeats 1
+```
 
-# 4) Compute TF stats (train split only; used for non-CV training)
-python -m src.data.compute_stats \
-  --train_csv splits/metadata_train.csv \
-  --representations mfcc gammatone
-
-# 5) Run 5-fold CV (default evaluation path)
+Run cross-validation for a candidate configuration:
+```bash
 python -m src.experiments.run_cv \
   --cv_index splits/cv/index.csv \
   --results_dir results \
@@ -143,123 +89,63 @@ python -m src.experiments.run_cv \
   --backbone mobilenetv2 \
   --auto_pos_weight \
   --tune_threshold
-# Optional: add --train_device_filter/--val_device_filter/--test_device_filter
-# (set all three to the same device) for within-device CV.
-# For SwinV2 or EfficientNetV2-S, also set --image_size (256 or 384).
+```
 
-# 5b) Select best config per device from CV summary
-# Important: run this on a CV-only summary table.
-# If summary.csv also includes final/eval runs, isolate CV rows first.
+Select the best configuration per device from a CV-only summary file:
+```bash
 python -m src.experiments.select_best_config \
   --summary_csv results/summary.csv \
   --expected_folds 5 \
   --output_csv results/selection/best_config_per_device.csv \
   --all_csv results/selection/config_summary_by_device.csv
+```
 
-# 6) Train a final model (within-device or pooled)
+Train a final model:
+```bash
 python -m src.training.train \
   --train_csv splits/metadata_train.csv \
   --val_csv splits/metadata_val.csv \
   --test_csv splits/metadata_test.csv \
   --representation mfcc \
   --backbone mobilenetv2 \
-  --train_device_filter iphone \
-  --val_device_filter iphone \
-  --test_device_filter iphone \
   --auto_pos_weight \
   --tune_threshold \
   --amp \
   --save_predictions \
   --results_dir results
-# Optional: omit device filters for pooled training.
-# For SwinV2 or EfficientNetV2-S, also set --image_size (256 or 384).
+```
 
-# 7) Cross-device evaluation using the saved checkpoint (no retraining)
+Evaluate a saved checkpoint without retraining:
+```bash
 python -m src.training.train \
   --eval_only \
   --checkpoint_path checkpoints/<run_name>/best.pth \
   --train_csv splits/metadata_train.csv \
   --val_csv splits/metadata_val.csv \
   --test_csv splits/metadata_test.csv \
-  --train_device_filter iphone \
-  --val_device_filter iphone \
-  --test_device_filter android_phone digital_stethoscope \
   --per_device_eval \
   --save_predictions \
   --results_dir results
 ```
 
-## Quick Smoke Test
-This minimal run verifies that the training pipeline works end-to-end.
-It requires authorized local access to the private dataset files (`heart_sounds/` and `lvef.csv`).
-
+Generate dissertation-ready figures and tables from a local `summary.csv` and saved run outputs:
 ```bash
-python -m src.data.build_metadata --lvef_csv lvef.csv --heart_dir heart_sounds --output_csv metadata.csv
-python -m src.data.make_patient_splits --metadata_csv metadata.csv --output_dir splits
-python -m src.data.compute_stats --train_csv splits/metadata_train.csv --representations mfcc --output_json tf_stats.json
-python -m src.training.train \
-  --train_csv splits/metadata_train.csv \
-  --val_csv splits/metadata_val.csv \
-  --test_csv splits/metadata_test.csv \
-  --tf_stats_json tf_stats.json \
-  --representation mfcc \
-  --backbone mobilenetv2 \
-  --epochs 1 \
-  --num_workers 0 \
-  --results_dir results \
-  --output_dir checkpoints \
-  --run_name smoke_test
+python3 scripts/make_dissertation_outputs.py \
+  --summary_csv summary.csv \
+  --output_dir reports/dissertation_summary_outputs \
+  --results_run_dir "results/first run" \
+  --dpi 300
 ```
 
-## Training and Evaluation Notes
-- Primary metric is F1 for the positive class (low LVEF, label 1).
-- Use `--auto_pos_weight` for class imbalance (neg/pos).
-- Use `--tune_threshold` to select the best decision threshold on the validation set.
-- `--eval_only` uses the checkpoint threshold and skips training (class weighting and tuning are ignored).
-- `run_cv` computes TF stats per fold by default; disable with `--skip_compute_stats`.
-- Input size per backbone: 224x224 for MobileNet and EfficientNet-B0, 256x256 for SwinV2-Tiny/Small, and 384x384 for EfficientNetV2-S (matches pretrained configs for more stable transfer).
-- Save predictions only for final selected models to keep output size manageable.
-- Splits: final train/val/test is 65/15/20 (patient-level). CV folds are 72/8/20 per fold (val is 10% of the remaining 80%), using a larger test set for a stable estimate.
-
-## Default Hyperparameters
-Defaults from `src/training/train.py` (unless overridden in the notebook or CLI):
-- `batch_size`: 32
-- `epochs`: 100
-- `lr`: 1e-4
-- `optimizer`: adamw
-- `weight_decay`: 1e-4
-- `scheduler`: cosine (min_lr 1e-6, warmup_epochs 5)
-- `grad_accum_steps`: 1
-- `eval_threshold`: 0.5
-- `early_stopping_patience`: 15 (min_delta 0.0)
-- `sample_rate`: 2000
-- `fixed_duration`: 4.0 s
-- `image_size`: 224 (overridden for SwinV2/EfficientNetV2-S as documented)
-- `normalization`: global (single-set stats)
-- `amp`: off by default (enable with `--amp`)
-- `auto_pos_weight`: off by default (enable with `--auto_pos_weight`)
-- `tune_threshold`: off by default (enable with `--tune_threshold`)
-
-## Outputs
-- `results/summary.csv`: aggregated metrics per run (and per device when enabled).
-- `results/<run_name>/metrics.json` and `metrics.csv`: run metadata + metrics.
-- `results/<run_name>/predictions_{val,test}.csv`: per-example outputs when enabled.
-- `results/<run_name>/history.csv`: per-epoch metrics when enabled.
-- `results/selection/best_config_per_device.csv`: best config per device from summary.csv (generated by `select_best_config.py`).
-- `results/selection/config_summary_by_device.csv`: aggregated config stats per device (generated by `select_best_config.py`).
-- `checkpoints/<run_name>/best.pth`: best checkpoint by validation F1_pos.
+## Notes on Reproducibility
+- Primary training entrypoint: `src/training/train.py`
+- Primary early-stopping metric during training: positive-class F1 on validation data
+- Cross-validation config selection uses mean test `F1_pos` across folds
+- Cross-validation and final evaluation are patient-level split to avoid leakage across recordings from the same patient
+- The dissertation reporting code reads locally generated summaries and prediction files; it does not bundle sensitive data into the repository
 
 ## Citation
 Citation metadata is provided in `CITATION.cff`.
 
-## Colab
-Use `colab_pipeline.ipynb` for a guided end-to-end run on Google Colab.
-
-## Preliminary Experiments
-These preliminary experiments helped define the research scope for this project:
-- [Multi-Task vs Single-Task Modeling for PCG Analysis](https://github.com/anywheredoor/pcg_experiment_1)
-- [PCG-Only Baseline for Reduced LVEF Detection (ViT-B/16)](https://github.com/anywheredoor/pcg_experiment_2)
-- [Phonocardiogram MIL Pipeline for Reduced LVEF Screening](https://github.com/anywheredoor/pcg_experiment_3)
-
 ## License
-This project is released under the Apache License 2.0. See `LICENSE`.
+Apache License 2.0. See `LICENSE`.

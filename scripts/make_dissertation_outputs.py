@@ -64,7 +64,7 @@ def parse_args() -> argparse.Namespace:
         default="results/first run",
         help=(
             "Optional directory containing saved run folders (run_name-matched) "
-            "with predictions/history for ROC/PR/calibration/learning-curve figures."
+            "with saved predictions needed for ROC-based dissertation figures."
         ),
     )
     parser.add_argument(
