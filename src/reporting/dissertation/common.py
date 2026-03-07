@@ -27,7 +27,7 @@ from src.models.models import BACKBONE_CONFIGS, create_model
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score
+from sklearn.metrics import average_precision_score, confusion_matrix, f1_score, roc_auc_score
 
 METRIC_COLS = [
     "test_f1_pos",
@@ -627,6 +627,248 @@ def _patient_cluster_bootstrap_threshold_metrics(
         "specificity_ci95_low": float(spec_low),
         "specificity_ci95_high": float(spec_high),
     }
+
+
+def _patient_cluster_bootstrap_discrimination_vs_random(
+    df: pd.DataFrame,
+    cluster_col: str = "patient_id",
+    n_bootstrap: int = BOOTSTRAP_REPLICATES,
+    seed: int = BOOTSTRAP_RANDOM_SEED,
+) -> Dict[str, object]:
+    required = {cluster_col, "label", "prob"}
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise ValueError(f"Bootstrap discrimination metrics require columns: {missing}")
+
+    sub = df.dropna(subset=[cluster_col, "label", "prob"]).copy()
+    if sub.empty or sub["label"].nunique() < 2:
+        return {
+            "bootstrap_unit": f"{cluster_col} (cluster bootstrap)",
+            "bootstrap_replicates_requested": n_bootstrap,
+            "bootstrap_replicates_used": 0,
+            "bootstrap_attempts": 0,
+            "auroc_ci95_low": np.nan,
+            "auroc_ci95_high": np.nan,
+            "auprc_ci95_low": np.nan,
+            "auprc_ci95_high": np.nan,
+            "prevalence_records_ci95_low": np.nan,
+            "prevalence_records_ci95_high": np.nan,
+            "delta_auroc_vs_random_ci95_low": np.nan,
+            "delta_auroc_vs_random_ci95_high": np.nan,
+            "delta_auprc_vs_random_prevalence_ci95_low": np.nan,
+            "delta_auprc_vs_random_prevalence_ci95_high": np.nan,
+            "auroc_above_random_95ci": False,
+            "auprc_above_random_95ci": False,
+        }
+
+    groups = [
+        (
+            g["label"].to_numpy(dtype=int),
+            g["prob"].to_numpy(dtype=float),
+        )
+        for _, g in sub.groupby(cluster_col, sort=False)
+    ]
+    if not groups:
+        return {
+            "bootstrap_unit": f"{cluster_col} (cluster bootstrap)",
+            "bootstrap_replicates_requested": n_bootstrap,
+            "bootstrap_replicates_used": 0,
+            "bootstrap_attempts": 0,
+            "auroc_ci95_low": np.nan,
+            "auroc_ci95_high": np.nan,
+            "auprc_ci95_low": np.nan,
+            "auprc_ci95_high": np.nan,
+            "prevalence_records_ci95_low": np.nan,
+            "prevalence_records_ci95_high": np.nan,
+            "delta_auroc_vs_random_ci95_low": np.nan,
+            "delta_auroc_vs_random_ci95_high": np.nan,
+            "delta_auprc_vs_random_prevalence_ci95_low": np.nan,
+            "delta_auprc_vs_random_prevalence_ci95_high": np.nan,
+            "auroc_above_random_95ci": False,
+            "auprc_above_random_95ci": False,
+        }
+
+    rng = np.random.default_rng(seed)
+    boot_auroc: List[float] = []
+    boot_auprc: List[float] = []
+    boot_prevalence: List[float] = []
+    boot_delta_auroc: List[float] = []
+    boot_delta_auprc: List[float] = []
+    attempts = 0
+    max_attempts = max(n_bootstrap * 10, n_bootstrap)
+    n_groups = len(groups)
+
+    while len(boot_auroc) < n_bootstrap and attempts < max_attempts:
+        attempts += 1
+        sample_idx = rng.integers(0, n_groups, size=n_groups)
+        y_boot = np.concatenate([groups[i][0] for i in sample_idx])
+        if np.unique(y_boot).size < 2:
+            continue
+        p_boot = np.concatenate([groups[i][1] for i in sample_idx])
+        prevalence_boot = float(np.mean(y_boot))
+        auroc_boot = float(roc_auc_score(y_boot, p_boot))
+        auprc_boot = float(average_precision_score(y_boot, p_boot))
+        boot_auroc.append(auroc_boot)
+        boot_auprc.append(auprc_boot)
+        boot_prevalence.append(prevalence_boot)
+        boot_delta_auroc.append(auroc_boot - 0.5)
+        boot_delta_auprc.append(auprc_boot - prevalence_boot)
+
+    if not boot_auroc:
+        return {
+            "bootstrap_unit": f"{cluster_col} (cluster bootstrap)",
+            "bootstrap_replicates_requested": n_bootstrap,
+            "bootstrap_replicates_used": 0,
+            "bootstrap_attempts": attempts,
+            "auroc_ci95_low": np.nan,
+            "auroc_ci95_high": np.nan,
+            "auprc_ci95_low": np.nan,
+            "auprc_ci95_high": np.nan,
+            "prevalence_records_ci95_low": np.nan,
+            "prevalence_records_ci95_high": np.nan,
+            "delta_auroc_vs_random_ci95_low": np.nan,
+            "delta_auroc_vs_random_ci95_high": np.nan,
+            "delta_auprc_vs_random_prevalence_ci95_low": np.nan,
+            "delta_auprc_vs_random_prevalence_ci95_high": np.nan,
+            "auroc_above_random_95ci": False,
+            "auprc_above_random_95ci": False,
+        }
+
+    auroc_low, auroc_high = np.quantile(np.asarray(boot_auroc, dtype=float), [0.025, 0.975])
+    auprc_low, auprc_high = np.quantile(np.asarray(boot_auprc, dtype=float), [0.025, 0.975])
+    prev_low, prev_high = np.quantile(np.asarray(boot_prevalence, dtype=float), [0.025, 0.975])
+    delta_auroc_low, delta_auroc_high = np.quantile(np.asarray(boot_delta_auroc, dtype=float), [0.025, 0.975])
+    delta_auprc_low, delta_auprc_high = np.quantile(np.asarray(boot_delta_auprc, dtype=float), [0.025, 0.975])
+    return {
+        "bootstrap_unit": f"{cluster_col} (cluster bootstrap)",
+        "bootstrap_replicates_requested": n_bootstrap,
+        "bootstrap_replicates_used": len(boot_auroc),
+        "bootstrap_attempts": attempts,
+        "auroc_ci95_low": float(auroc_low),
+        "auroc_ci95_high": float(auroc_high),
+        "auprc_ci95_low": float(auprc_low),
+        "auprc_ci95_high": float(auprc_high),
+        "prevalence_records_ci95_low": float(prev_low),
+        "prevalence_records_ci95_high": float(prev_high),
+        "delta_auroc_vs_random_ci95_low": float(delta_auroc_low),
+        "delta_auroc_vs_random_ci95_high": float(delta_auroc_high),
+        "delta_auprc_vs_random_prevalence_ci95_low": float(delta_auprc_low),
+        "delta_auprc_vs_random_prevalence_ci95_high": float(delta_auprc_high),
+        "auroc_above_random_95ci": bool(delta_auroc_low > 0.0),
+        "auprc_above_random_95ci": bool(delta_auprc_low > 0.0),
+    }
+
+
+def compute_test_discrimination_vs_random_baseline(
+    views: Dict[str, pd.DataFrame], results_run_dir: Path
+) -> pd.DataFrame:
+    if not results_run_dir.exists():
+        return pd.DataFrame()
+
+    rows: List[Dict[str, object]] = []
+    final_overall = views.get("final_overall", pd.DataFrame()).copy()
+    cross_pairwise = views.get("cross_pairwise", pd.DataFrame()).copy()
+    pool_overall = views.get("pool_overall", pd.DataFrame()).copy()
+
+    for device in DEVICE_ORDER:
+        row = final_overall[final_overall["train_device_filter"] == device]
+        if row.empty:
+            continue
+        result_row = row.iloc[0]
+        run_name = str(result_row["run_name"])
+        pred = _load_predictions_file(results_run_dir, run_name, split="test")
+        if pred is None or pred.empty:
+            continue
+        pred = pred.copy()
+        pred["patient_id"] = pred["patient_id"].astype(str)
+        rows.append(
+            {
+                "evaluation_group": "final_within",
+                "evaluation_label": f"Best-config within-device (same-device test set): {_pretty_device(device)}",
+                "run_name": run_name,
+                "source_run_name": "",
+                "source_device": device,
+                "target_device": device,
+                "n_records": int(len(pred)),
+                "n_patients": int(pred["patient_id"].nunique()),
+                "n_positive_records": int(pred["label"].sum()),
+                "prevalence_records": float(pred["label"].mean()),
+                "auroc": float(roc_auc_score(pred["label"].astype(int), pred["prob"].astype(float))),
+                "auprc": float(average_precision_score(pred["label"].astype(int), pred["prob"].astype(float))),
+                "random_auroc_baseline": 0.5,
+                "random_auprc_baseline": float(pred["label"].mean()),
+                **_patient_cluster_bootstrap_discrimination_vs_random(pred, cluster_col="patient_id"),
+            }
+        )
+
+    for source_device in DEVICE_ORDER:
+        for target_device in DEVICE_ORDER:
+            if source_device == target_device:
+                continue
+            row = cross_pairwise[
+                (cross_pairwise["source_device"] == source_device)
+                & (cross_pairwise["target_device"] == target_device)
+            ]
+            if row.empty:
+                continue
+            result_row = row.iloc[0]
+            run_name = str(result_row["run_name"])
+            pred = _load_predictions_file(results_run_dir, run_name, split="test")
+            if pred is None or pred.empty:
+                continue
+            pred = pred.copy()
+            pred = pred[pred["device"].astype(str) == target_device].copy()
+            if pred.empty or pred["label"].nunique() < 2:
+                continue
+            pred["patient_id"] = pred["patient_id"].astype(str)
+            rows.append(
+                {
+                    "evaluation_group": "cross_pairwise",
+                    "evaluation_label": f"Cross-device: {_pretty_device(source_device)} -> {_pretty_device(target_device)}",
+                    "run_name": run_name,
+                    "source_run_name": str(result_row["source_run_name"]),
+                    "source_device": source_device,
+                    "target_device": target_device,
+                    "n_records": int(len(pred)),
+                    "n_patients": int(pred["patient_id"].nunique()),
+                    "n_positive_records": int(pred["label"].sum()),
+                    "prevalence_records": float(pred["label"].mean()),
+                    "auroc": float(roc_auc_score(pred["label"].astype(int), pred["prob"].astype(float))),
+                    "auprc": float(average_precision_score(pred["label"].astype(int), pred["prob"].astype(float))),
+                    "random_auroc_baseline": 0.5,
+                    "random_auprc_baseline": float(pred["label"].mean()),
+                    **_patient_cluster_bootstrap_discrimination_vs_random(pred, cluster_col="patient_id"),
+                }
+            )
+
+    if not pool_overall.empty:
+        result_row = pool_overall.iloc[0]
+        run_name = str(result_row["run_name"])
+        pred = _load_predictions_file(results_run_dir, run_name, split="test")
+        if pred is not None and not pred.empty:
+            pred = pred.copy()
+            pred["patient_id"] = pred["patient_id"].astype(str)
+            rows.append(
+                {
+                    "evaluation_group": "pool_overall",
+                    "evaluation_label": "Pooled-device: overall",
+                    "run_name": run_name,
+                    "source_run_name": "",
+                    "source_device": "pooled_all_devices",
+                    "target_device": "all_devices",
+                    "n_records": int(len(pred)),
+                    "n_patients": int(pred["patient_id"].nunique()),
+                    "n_positive_records": int(pred["label"].sum()),
+                    "prevalence_records": float(pred["label"].mean()),
+                    "auroc": float(roc_auc_score(pred["label"].astype(int), pred["prob"].astype(float))),
+                    "auprc": float(average_precision_score(pred["label"].astype(int), pred["prob"].astype(float))),
+                    "random_auroc_baseline": 0.5,
+                    "random_auprc_baseline": float(pred["label"].mean()),
+                    **_patient_cluster_bootstrap_discrimination_vs_random(pred, cluster_col="patient_id"),
+                }
+            )
+
+    return pd.DataFrame(rows)
 
 def compute_pooled_auroc_by_auscultation_site(
     views: Dict[str, pd.DataFrame], results_run_dir: Path

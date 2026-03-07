@@ -259,7 +259,7 @@ def build_pooled_test_performance_table(
             }
         )
 
-    return pd.DataFrame(
+    out = pd.DataFrame(
         rows,
         columns=[
             "Model",
@@ -269,6 +269,66 @@ def build_pooled_test_performance_table(
             "Specificity, % (95% CI)",
         ],
     )
+    return out.rename(columns={"Model": "Model evaluated on pooled test set"})
+
+
+def _format_ci(point: float, low: float, high: float) -> str:
+    if any(pd.isna(v) for v in [point, low, high]):
+        return "NA"
+    return f"{point:.3f} ({low:.3f}-{high:.3f})"
+
+
+def build_discrimination_vs_random_baseline_table(bootstrap_df: pd.DataFrame) -> pd.DataFrame:
+    if bootstrap_df.empty:
+        return pd.DataFrame()
+
+    order = {"final_within": 0, "cross_pairwise": 1, "pool_overall": 2}
+    table_df = bootstrap_df[
+        bootstrap_df["evaluation_group"].isin(["final_within", "cross_pairwise", "pool_overall"])
+    ].copy()
+    if table_df.empty:
+        return pd.DataFrame()
+
+    table_df["__group_sort"] = table_df["evaluation_group"].map(order).fillna(99).astype(int)
+    table_df["__source_sort"] = pd.Categorical(
+        table_df["source_device"].astype(str),
+        categories=DEVICE_ORDER + ["pooled_all_devices"],
+        ordered=True,
+    )
+    table_df["__target_sort"] = pd.Categorical(
+        table_df["target_device"].astype(str),
+        categories=DEVICE_ORDER + ["all_devices"],
+        ordered=True,
+    )
+    table_df = (
+        table_df.sort_values(["__group_sort", "__source_sort", "__target_sort"])
+        .reset_index(drop=True)
+    )
+
+    out = pd.DataFrame(
+        {
+            "Model": table_df["evaluation_label"].astype(str),
+            "AUROC (95% CI)": [
+                _format_ci(v, lo, hi)
+                for v, lo, hi in zip(
+                    table_df["auroc"],
+                    table_df["auroc_ci95_low"],
+                    table_df["auroc_ci95_high"],
+                )
+            ],
+            "Above 0.5 under 95% CI": table_df["auroc_above_random_95ci"].map({True: "Yes", False: "No"}),
+            "AUPRC (95% CI)": [
+                _format_ci(v, lo, hi)
+                for v, lo, hi in zip(
+                    table_df["auprc"],
+                    table_df["auprc_ci95_low"],
+                    table_df["auprc_ci95_high"],
+                )
+            ],
+            "Above prevalence under 95% CI": table_df["auprc_above_random_95ci"].map({True: "Yes", False: "No"}),
+        }
+    )
+    return out
 
 
 def build_summary_tables(

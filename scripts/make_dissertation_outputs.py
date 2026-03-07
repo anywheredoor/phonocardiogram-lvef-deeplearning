@@ -21,6 +21,7 @@ from src.reporting.dissertation.common import (
     classify_runs,
     compute_backbone_parameter_table,
     compute_pooled_auroc_by_auscultation_site,
+    compute_test_discrimination_vs_random_baseline,
     extract_clean_views,
     load_and_normalize_summary,
 )
@@ -34,6 +35,7 @@ from src.reporting.dissertation.figures import (
     plot_source_model_transfer_roc_curves,
 )
 from src.reporting.dissertation.tables import (
+    build_discrimination_vs_random_baseline_table,
     build_pooled_test_performance_table,
     build_raw_dataset_summary_table,
     build_shared_training_settings_table,
@@ -88,6 +90,7 @@ def write_readme(
     lines.append("Table 1 uses `lvef.csv` and `heart_sounds` to summarize the study cohort before signal preprocessing.")
     lines.append("Table 2 summarizes the shared training settings used across experiments.")
     lines.append("Table 3 reports pooled-test F1, sensitivity, and specificity for the pooled model and the best-config within-device models.")
+    lines.append("Table 4 summarizes whether AUROC and AUPRC remained above their random baselines under 95% patient-cluster bootstrap confidence intervals.")
     lines.append("Figures 1-4 use aggregate metrics from the summary CSV.")
     lines.append("Figures 5-7 use saved test predictions from `results/first run` (run folders named by `run_name`).")
     lines.append("")
@@ -129,7 +132,7 @@ def write_readme(
     figure_names = sorted(p.name for p in (output_dir / 'figures').glob('*.png'))
     for name in figure_names:
         lines.append(f"- `{name}` (PNG) and `{name.replace('.png', '.pdf')}` (PDF)")
-    (output_dir / 'README.md').write_text("\\n".join(lines) + "\\n", encoding='utf-8')
+    (output_dir / 'README.md').write_text("\n".join(lines) + "\n", encoding='utf-8')
 
 
 def generate_outputs(summary_csv: str, output_dir: str, dpi: int, results_run_dir: str | None = None) -> None:
@@ -146,6 +149,11 @@ def generate_outputs(summary_csv: str, output_dir: str, dpi: int, results_run_di
     views = extract_clean_views(df, run_catalog)
     cv_agg, cv_best = aggregate_cv(views['cv_rows'])
     backbone_param_df = compute_backbone_parameter_table()
+    results_run_path = Path(results_run_dir) if results_run_dir else Path("__missing__")
+    bootstrap_vs_random_df = compute_test_discrimination_vs_random_baseline(
+        views=views,
+        results_run_dir=results_run_path,
+    )
 
     tables = {
         "table_01_dataset_summary_before_preprocessing.csv": build_raw_dataset_summary_table(
@@ -155,16 +163,24 @@ def generate_outputs(summary_csv: str, output_dir: str, dpi: int, results_run_di
         "table_02_shared_training_settings_used_across_experiments.csv": build_shared_training_settings_table(),
         "table_03_pooled_test_performance_pooled_vs_best_within_models.csv": build_pooled_test_performance_table(
             views=views,
-            results_run_dir=Path(results_run_dir) if results_run_dir else Path("__missing__"),
+            results_run_dir=results_run_path,
+        ),
+        "table_04_discrimination_vs_random_baseline_under_bootstrap_ci.csv": build_discrimination_vs_random_baseline_table(
+            bootstrap_df=bootstrap_vs_random_df,
         ),
     }
 
     _save_csv(run_catalog, metadata_dir / 'run_catalog_classified_from_summary.csv')
     _save_csv(views['all_rows'], metadata_dir / 'summary_rows_with_run_kind.csv')
     _save_csv(backbone_param_df, metadata_dir / 'backbone_parameter_counts_used_in_experiments.csv')
+    if not bootstrap_vs_random_df.empty:
+        _save_csv(
+            bootstrap_vs_random_df,
+            metadata_dir / 'bootstrap_ci_vs_random_baseline_patient_cluster_test_predictions.csv',
+        )
     pooled_site_auroc_df = compute_pooled_auroc_by_auscultation_site(
         views=views,
-        results_run_dir=Path(results_run_dir) if results_run_dir else Path('__missing__'),
+        results_run_dir=results_run_path,
     )
     if not pooled_site_auroc_df.empty:
         _save_csv(
@@ -191,13 +207,13 @@ def generate_outputs(summary_csv: str, output_dir: str, dpi: int, results_run_di
     )
     plot_source_model_transfer_roc_curves(
         views=views,
-        results_run_dir=Path(results_run_dir) if results_run_dir else Path('__missing__'),
+        results_run_dir=results_run_path,
         figures_dir=figures_dir,
         dpi=dpi,
     )
     plot_pooled_test_roc_comparison_pooled_vs_best_within_models(
         views=views,
-        results_run_dir=Path(results_run_dir) if results_run_dir else Path('__missing__'),
+        results_run_dir=results_run_path,
         figures_dir=figures_dir,
         dpi=dpi,
     )
