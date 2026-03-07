@@ -102,10 +102,10 @@ This structure supports within-device, cross-device, and pooled-device compariso
 
 ### Within-device workflow
 ```mermaid
-flowchart LR
-    A["Training devices<br/>iPhone<br/>Android phone<br/>Digital stethoscope"]
-    B["Representations<br/>MFCC<br/>Gammatone"]
-    C["Backbones<br/>MobileNetV2<br/>MobileNetV3-Large<br/>EfficientNet-B0<br/>EfficientNetV2-S<br/>SwinV2-Tiny<br/>SwinV2-Small"]
+flowchart TD
+    A["iPhone<br/>Android phone<br/>Digital stethoscope"]
+    B["MFCC<br/>Gammatone"]
+    C["MobileNetV2<br/>MobileNetV3-Large<br/>EfficientNet-B0<br/>EfficientNetV2-S<br/>SwinV2-Tiny<br/>SwinV2-Small"]
     D["Best config identified for each device"]
     A --> B --> C --> D
 ```
@@ -119,6 +119,10 @@ flowchart TB
     B --> B2["Evaluate on Digital stethoscope"]
     C["Best-config within-device model trained on Digital stethoscope"] --> C1["Evaluate on iPhone"]
     C --> C2["Evaluate on Android phone"]
+    A2 --> B
+    B2 --> C
+    linkStyle 6 stroke-width:0px,fill:none;
+    linkStyle 7 stroke-width:0px,fill:none;
 ```
 
 ### Pooled-device workflow
