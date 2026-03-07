@@ -11,15 +11,9 @@ The project studies reduced left ventricular ejection fraction (LVEF) detection 
 
 The task is binary classification: reduced LVEF (`EF <= 40%`) versus non-reduced LVEF (`EF > 40%`).
 
-## Scope
-- Research code only
-- No raw audio or linked clinical labels are distributed here
-- Not intended for clinical deployment
-
 ## Table of Contents
 - [Data Source and Study Context](#data-source-and-study-context)
 - [Repository Layout](#repository-layout)
-- [Private Data](#private-data)
 - [Preprocessing](#preprocessing)
 - [Experiment Workflow](#experiment-workflow)
 - [Setup](#setup)
@@ -43,16 +37,7 @@ High-level study context shared with the registered study:
 
 The subset used for this project contains WAV heart-sound recordings plus an LVEF CSV. It does not include additional clinical covariates such as age, sex, or BMI.
 
-## Repository Layout
-- `src/data/`: metadata building, split generation, quality checks, and feature-statistics utilities
-- `src/datasets/`: dataset loading and on-the-fly time-frequency feature generation
-- `src/models/`: model factory and backbone definitions
-- `src/training/`: training and evaluation entrypoint
-- `src/experiments/`: cross-validation runner and best-configuration selection
-- `colab_pipeline.ipynb`: guided end-to-end workflow for Google Colab
-
-## Private Data
-This repository expects local access to private study data, but those files are intentionally excluded from version control. The heart-sound recordings and LVEF labels are not shared here because they originate from human-participant data and remain restricted for participant privacy, ethics approval, and local data-governance reasons.
+The raw heart-sound recordings and LVEF labels are not distributed in this repository. They originate from human-participant data and remain restricted for participant privacy, ethics approval, and local data-governance reasons.
 
 Expected local inputs:
 - `heart_sounds/` with per-patient WAV files
@@ -63,6 +48,14 @@ The following are gitignored by default:
 - generated metadata and split files
 - checkpoints, results, and reports
 - other derived artifacts
+
+## Repository Layout
+- `src/data/`: metadata building, split generation, quality checks, and feature-statistics utilities
+- `src/datasets/`: dataset loading and on-the-fly time-frequency feature generation
+- `src/models/`: model factory and backbone definitions
+- `src/training/`: training and evaluation entrypoint
+- `src/experiments/`: cross-validation runner and best-configuration selection
+- `colab_pipeline.ipynb`: guided end-to-end workflow for Google Colab
 
 ## Preprocessing
 The training pipeline performs feature generation on the fly.
@@ -90,12 +83,56 @@ After configuration selection:
 This structure supports within-device, cross-device, and pooled-device comparisons under a consistent pipeline.
 
 ```mermaid
-flowchart TD
-    A["Metadata and patient-level splits"] --> B["Within-device grid<br/>3 devices x 2 representations x 6 backbones<br/>36 configs, each with 5-fold CV"]
-    B --> C["Best config selected per device"]
-    C --> D["Final within-device training<br/>3 training runs"]
-    C --> E["Cross-device evaluation<br/>6 eval-only runs"]
-    C --> F["Pooled-device training<br/>1 training run"]
+flowchart LR
+    A["Metadata and patient-level splits"] --> WCV
+    WCV --> S["Best config selected per device"]
+    S --> F
+    S --> C
+    S --> P
+
+    subgraph W["Within-device model selection"]
+        direction LR
+        subgraph WD["Training devices"]
+            direction TB
+            WD1["iPhone"]
+            WD2["Android phone"]
+            WD3["Digital stethoscope"]
+        end
+        subgraph WR["Representations"]
+            direction TB
+            WR1["MFCC"]
+            WR2["Gammatone"]
+        end
+        subgraph WB["Backbones"]
+            direction TB
+            WB1["MobileNetV2"]
+            WB2["MobileNetV3-Large"]
+            WB3["EfficientNet-B0"]
+            WB4["EfficientNetV2-S"]
+            WB5["SwinV2-Tiny"]
+            WB6["SwinV2-Small"]
+        end
+        WD --> WR --> WB --> WCV["36 within-device configs<br/>5-fold CV each"]
+    end
+
+    subgraph F["Final within-device training"]
+        direction TB
+        F1["Best-config model trained on iPhone"]
+        F2["Best-config model trained on Android phone"]
+        F3["Best-config model trained on Digital stethoscope"]
+    end
+
+    subgraph C["Cross-device evaluation"]
+        direction TB
+        C1["iPhone model evaluated on Android phone and Digital stethoscope"]
+        C2["Android phone model evaluated on iPhone and Digital stethoscope"]
+        C3["Digital stethoscope model evaluated on iPhone and Android phone"]
+    end
+
+    subgraph P["Pooled-device training"]
+        direction TB
+        P1["Selected config trained on all devices"]
+    end
 ```
 
 ## Setup
