@@ -123,22 +123,24 @@ flowchart LR
         WB5["SwinV2-Tiny"]
         WB6["SwinV2-Small"]
     end
-    classDef hidden fill:none,stroke:none,color:none;
-    J1[" "]:::hidden
-    J2[" "]:::hidden
-    WD1 --> J1
-    WD2 --> J1
-    WD3 --> J1
-    J1 --> WR1
-    J1 --> WR2
-    WR1 --> J2
-    WR2 --> J2
-    J2 --> WB1
-    J2 --> WB2
-    J2 --> WB3
-    J2 --> WB4
-    J2 --> WB5
-    J2 --> WB6
+    WD1 --> WR1
+    WD1 --> WR2
+    WD2 --> WR1
+    WD2 --> WR2
+    WD3 --> WR1
+    WD3 --> WR2
+    WR1 --> WB1
+    WR1 --> WB2
+    WR1 --> WB3
+    WR1 --> WB4
+    WR1 --> WB5
+    WR1 --> WB6
+    WR2 --> WB1
+    WR2 --> WB2
+    WR2 --> WB3
+    WR2 --> WB4
+    WR2 --> WB5
+    WR2 --> WB6
     WB1 --> S["Best config identified for each device"]
     WB2 --> S
     WB3 --> S
@@ -150,7 +152,7 @@ flowchart LR
 ### Cross-device workflow
 ```mermaid
 flowchart TB
-    subgraph R1[" "]
+    subgraph R1["iPhone-trained source model"]
         direction LR
         A["Best-config within-device model trained on iPhone"]
         A1["Evaluate on Android phone"]
@@ -158,7 +160,7 @@ flowchart TB
         A --> A1
         A --> A2
     end
-    subgraph R2[" "]
+    subgraph R2["Android-trained source model"]
         direction LR
         B["Best-config within-device model trained on Android phone"]
         B1["Evaluate on iPhone"]
@@ -166,7 +168,7 @@ flowchart TB
         B --> B1
         B --> B2
     end
-    subgraph R3[" "]
+    subgraph R3["Digital-stethoscope-trained source model"]
         direction LR
         C["Best-config within-device model trained on Digital stethoscope"]
         C1["Evaluate on iPhone"]
@@ -179,7 +181,10 @@ flowchart TB
 ### Pooled-device workflow
 ```mermaid
 flowchart LR
-    A["Best-config pooled-device model trained on all devices"] --> B["Evaluate on pooled test set"]
+    A["Best-config pooled-device model trained on all devices"] --> E["Evaluate on pooled test set"]
+    B["Best-config within-device model trained on iPhone"] --> E
+    C["Best-config within-device model trained on Android phone"] --> E
+    D["Best-config within-device model trained on Digital stethoscope"] --> E
 ```
 
 ## Command-Line Workflow
