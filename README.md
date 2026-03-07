@@ -111,20 +111,25 @@ flowchart TD
 ```
 
 ### Cross-device workflow
+#### iPhone-trained source model
 ```mermaid
-flowchart TB
+flowchart LR
     A["Best-config within-device model trained on iPhone"] --> A1["Evaluate on Android phone"]
     A --> A2["Evaluate on Digital stethoscope"]
+```
+
+#### Android-trained source model
+```mermaid
+flowchart LR
     B["Best-config within-device model trained on Android phone"] --> B1["Evaluate on iPhone"]
     B --> B2["Evaluate on Digital stethoscope"]
+```
+
+#### Digital-stethoscope-trained source model
+```mermaid
+flowchart LR
     C["Best-config within-device model trained on Digital stethoscope"] --> C1["Evaluate on iPhone"]
     C --> C2["Evaluate on Android phone"]
-    A ~~~ B
-    B ~~~ C
-    A1 ~~~ B1
-    B1 ~~~ C1
-    A2 ~~~ B2
-    B2 ~~~ C2
 ```
 
 ### Pooled-device workflow
