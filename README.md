@@ -16,9 +16,9 @@ This repository is intended for research and educational use only, not for clini
 ## Table of Contents
 - [Data Source and Study Context](#data-source-and-study-context)
 - [Repository Layout](#repository-layout)
+- [Setup](#setup)
 - [Preprocessing](#preprocessing)
 - [Experiment Workflow](#experiment-workflow)
-- [Setup](#setup)
 - [Typical Workflow](#typical-workflow)
 - [Google Colab](#google-colab)
 - [Preliminary Experiments](#preliminary-experiments)
@@ -59,6 +59,21 @@ The following are gitignored by default:
 - `src/experiments/`: cross-validation runner and best-configuration selection
 - `colab_pipeline.ipynb`: guided end-to-end workflow for Google Colab
 
+## Setup
+Python 3.10+ is recommended.
+
+Flexible dependency install:
+```bash
+pip install -r requirements.txt
+```
+
+Pinned dependency install for stricter reproduction:
+```bash
+pip install -r requirements-lock.txt
+```
+
+If you need GPU support, install a compatible PyTorch build first, then install the remaining packages.
+
 ## Preprocessing
 The training pipeline performs feature generation on the fly.
 
@@ -84,14 +99,10 @@ After configuration selection:
 
 This structure supports within-device, cross-device, and pooled-device comparisons under a consistent pipeline.
 
+### Within-device workflow
 ```mermaid
 flowchart LR
     A["Metadata and patient-level splits"] --> WCV
-    WCV --> S["Best config selected per device"]
-    S --> F
-    S --> C
-    S --> P
-
     subgraph W["Within-device model selection"]
         direction LR
         subgraph WD["Training devices"]
@@ -116,41 +127,28 @@ flowchart LR
         end
         WD --> WR --> WB --> WCV["36 within-device configs<br/>5-fold CV each"]
     end
-
-    subgraph F["Final within-device training"]
-        direction TB
-        F1["Best-config model trained on iPhone"]
-        F2["Best-config model trained on Android phone"]
-        F3["Best-config model trained on Digital stethoscope"]
-    end
-
-    subgraph C["Cross-device evaluation"]
-        direction TB
-        C1["iPhone model evaluated on Android phone and Digital stethoscope"]
-        C2["Android phone model evaluated on iPhone and Digital stethoscope"]
-        C3["Digital stethoscope model evaluated on iPhone and Android phone"]
-    end
-
-    subgraph P["Pooled-device training"]
-        direction TB
-        P1["Selected config trained on all devices"]
-    end
+    WCV --> S["Best config selected per device"]
+    S --> F["Final within-device training<br/>3 training runs"]
 ```
 
-## Setup
-Python 3.10+ is recommended.
-
-Flexible dependency install:
-```bash
-pip install -r requirements.txt
+### Cross-device workflow
+```mermaid
+flowchart LR
+    A["Best-config model trained on iPhone"] --> B1["Evaluate on Android phone"]
+    A --> B2["Evaluate on Digital stethoscope"]
+    C["Best-config model trained on Android phone"] --> D1["Evaluate on iPhone"]
+    C --> D2["Evaluate on Digital stethoscope"]
+    E["Best-config model trained on Digital stethoscope"] --> F1["Evaluate on iPhone"]
+    E --> F2["Evaluate on Android phone"]
 ```
 
-Pinned dependency install for stricter reproduction:
-```bash
-pip install -r requirements-lock.txt
+### Pooled-device workflow
+```mermaid
+flowchart LR
+    A["Metadata and patient-level splits"] --> B["All devices combined"]
+    B --> C["Selected configuration"]
+    C --> D["Pooled-device training<br/>1 training run"]
 ```
-
-If you need GPU support, install a compatible PyTorch build first, then install the remaining packages.
 
 ## Typical Workflow
 Build metadata:
