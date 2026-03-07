@@ -33,7 +33,7 @@ from src.reporting.dissertation.figures import (
     plot_representation_effect_gammatone_minus_mfcc,
     plot_source_model_transfer_roc_curves,
 )
-from src.reporting.dissertation.tables import build_summary_tables
+from src.reporting.dissertation.tables import build_raw_dataset_summary_table
 
 
 def parse_args() -> argparse.Namespace:
@@ -80,7 +80,8 @@ def write_readme(
     lines: List[str] = []
     lines.append("# Dissertation Summary Outputs")
     lines.append("")
-    lines.append("These dissertation tables and figures were generated automatically from `summary.csv`.")
+    lines.append("These dissertation tables and figures were generated automatically from the project data files.")
+    lines.append("Table 1 uses `lvef.csv` and `heart_sounds` to summarize the study cohort before signal preprocessing.")
     lines.append("Figures 1-4 use aggregate metrics from the summary CSV.")
     lines.append("Figures 5-7 use saved test predictions from `results/first run` (run folders named by `run_name`).")
     lines.append("")
@@ -140,8 +141,12 @@ def generate_outputs(summary_csv: str, output_dir: str, dpi: int, results_run_di
     cv_agg, cv_best = aggregate_cv(views['cv_rows'])
     backbone_param_df = compute_backbone_parameter_table()
 
-    tables = build_summary_tables(df=views['all_rows'], run_catalog=run_catalog, views=views, cv_agg=cv_agg, cv_best=cv_best)
-    tables = {}
+    tables = {
+        "table_01_dataset_summary_before_preprocessing.csv": build_raw_dataset_summary_table(
+            lvef_csv_path=_REPO_ROOT / "lvef.csv",
+            heart_sounds_dir=_REPO_ROOT / "heart_sounds",
+        )
+    }
 
     _save_csv(run_catalog, metadata_dir / 'run_catalog_classified_from_summary.csv')
     _save_csv(views['all_rows'], metadata_dir / 'summary_rows_with_run_kind.csv')

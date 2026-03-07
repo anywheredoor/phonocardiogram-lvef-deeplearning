@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
+from collections import Counter
+from pathlib import Path
 from typing import Dict, List
+import wave
 
 import numpy as np
 import pandas as pd
@@ -14,6 +17,114 @@ from src.reporting.dissertation.common import (
     _device_or_all_categorical,
     _sort_by_device_columns,
 )
+
+_RAW_DEVICE_LABELS = {
+    "i": "iPhone",
+    "a": "Android phone",
+    "e": "Digital stethoscope",
+}
+
+_RAW_SITE_LABELS = {
+    "A": "Aortic",
+    "M": "Mitral",
+    "P": "Pulmonic",
+    "T": "Tricuspid",
+}
+
+
+def build_raw_dataset_summary_table(
+    lvef_csv_path: Path,
+    heart_sounds_dir: Path,
+) -> pd.DataFrame:
+    lvef_df = pd.read_csv(lvef_csv_path)
+    lvef_df["patient_id"] = lvef_df["patient_id"].astype(str)
+    lvef_df["ef"] = pd.to_numeric(lvef_df["ef"], errors="coerce")
+    labeled_df = lvef_df[lvef_df["ef"].notna()].copy().reset_index(drop=True)
+
+    patient_record_counts: List[int] = []
+    reduced_recordings = 0
+    non_reduced_recordings = 0
+    device_counts: Counter[str] = Counter()
+    site_counts: Counter[str] = Counter()
+    duration_values = set()
+    sample_rates = set()
+    channel_counts = set()
+
+    for row in labeled_df.itertuples(index=False):
+        wav_paths = sorted((heart_sounds_dir / row.patient_id).glob("*.wav"))
+        patient_record_counts.append(len(wav_paths))
+        is_reduced = float(row.ef) <= 40.0
+
+        for wav_path in wav_paths:
+            stem = wav_path.stem
+            device_counts[stem[0]] += 1
+            site_counts[stem[-1]] += 1
+            if is_reduced:
+                reduced_recordings += 1
+            else:
+                non_reduced_recordings += 1
+
+            with wave.open(str(wav_path), "rb") as wav_file:
+                sample_rates.add(int(wav_file.getframerate()))
+                channel_counts.add(int(wav_file.getnchannels()))
+                duration_values.add(round(wav_file.getnframes() / wav_file.getframerate(), 6))
+
+    total_patients = int(len(labeled_df))
+    total_recordings = int(sum(patient_record_counts))
+    reduced_patients = int((labeled_df["ef"] <= 40.0).sum())
+    non_reduced_patients = total_patients - reduced_patients
+    reduced_patient_pct = 100.0 * reduced_patients / total_patients
+    non_reduced_patient_pct = 100.0 * non_reduced_patients / total_patients
+    reduced_recording_pct = 100.0 * reduced_recordings / total_recordings
+    non_reduced_recording_pct = 100.0 * non_reduced_recordings / total_recordings
+    patients_with_12 = int(sum(count == 12 for count in patient_record_counts))
+    duration_seconds = min(duration_values) if duration_values else float("nan")
+
+    if len(sample_rates) == 1:
+        sample_rate_text = f"{next(iter(sample_rates)) / 1000:g} kHz"
+    else:
+        sample_rate_text = ", ".join(f"{sr / 1000:g} kHz" for sr in sorted(sample_rates))
+    if channel_counts == {1}:
+        channel_text = "mono"
+    else:
+        channel_text = ", ".join(str(ch) for ch in sorted(channel_counts))
+
+    rows = [
+        ("Total patients", f"{total_patients:,}"),
+        ("Total recordings", f"{total_recordings:,}"),
+        (
+            "Patients by class",
+            f"{reduced_patients:,} reduced LVEF ({reduced_patient_pct:.1f}%); "
+            f"{non_reduced_patients:,} non-reduced LVEF ({non_reduced_patient_pct:.1f}%)",
+        ),
+        (
+            "Recordings by class",
+            f"{reduced_recordings:,} reduced LVEF ({reduced_recording_pct:.1f}%); "
+            f"{non_reduced_recordings:,} non-reduced LVEF ({non_reduced_recording_pct:.1f}%)",
+        ),
+        (
+            "Recordings by device",
+            "; ".join(
+                f"{_RAW_DEVICE_LABELS[key]}: {device_counts[key]:,}"
+                for key in ("i", "a", "e")
+            ),
+        ),
+        (
+            "Recordings by auscultation site",
+            "; ".join(
+                f"{_RAW_SITE_LABELS[key]}: {site_counts[key]:,}"
+                for key in ("A", "M", "P", "T")
+            ),
+        ),
+        (
+            "Recordings per patient",
+            f"{min(patient_record_counts)}-{max(patient_record_counts)}; "
+            f"{patients_with_12:,} of {total_patients:,} patients have 12 recordings",
+        ),
+        ("Duration per recording", f"{duration_seconds:g} s for all recordings"),
+        ("Audio format", f"WAV, {channel_text}, {sample_rate_text} sampling rate"),
+    ]
+    return pd.DataFrame(rows, columns=["Attribute", "Details"])
 
 def build_summary_tables(
     df: pd.DataFrame,
