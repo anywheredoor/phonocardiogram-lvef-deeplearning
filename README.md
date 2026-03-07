@@ -11,6 +11,20 @@ The project studies reduced left ventricular ejection fraction (LVEF) detection 
 
 The task is binary classification: reduced LVEF (`EF <= 40%`) versus non-reduced LVEF (`EF > 40%`).
 
+## Table of Contents
+- [Scope](#scope)
+- [Data Source and Study Context](#data-source-and-study-context)
+- [Repository Layout](#repository-layout)
+- [Private Data](#private-data)
+- [Preprocessing](#preprocessing)
+- [Experiment Workflow](#experiment-workflow)
+- [Setup](#setup)
+- [Typical Workflow](#typical-workflow)
+- [Google Colab](#google-colab)
+- [Preliminary Experiments](#preliminary-experiments)
+- [Citation](#citation)
+- [License](#license)
+
 ## Scope
 - Research code only
 - No raw audio or linked clinical labels are distributed here
@@ -39,7 +53,7 @@ The subset used for this project contains WAV heart-sound recordings plus an LVE
 - `colab_pipeline.ipynb`: guided end-to-end workflow for Google Colab
 
 ## Private Data
-This repository expects local access to private study data, but those files are intentionally excluded from version control.
+This repository expects local access to private study data, but those files are intentionally excluded from version control. The heart-sound recordings and LVEF labels are not shared here because they originate from human-participant data and remain restricted for participant privacy, ethics approval, and local data-governance reasons.
 
 Expected local inputs:
 - `heart_sounds/` with per-patient WAV files
@@ -58,10 +72,9 @@ At a high level, each recording is:
 - loaded from WAV
 - resampled to the target sampling rate (default: 2 kHz)
 - band-pass filtered (`20-800 Hz`)
-- cropped or padded to a fixed duration (default: 4 s)
+- center-cropped or zero-padded to a fixed duration (default: 4 s)
 - converted to either MFCC or gammatone representation
 - resized to the requested image size for ImageNet-pretrained backbones
-- optionally normalized using training-set feature statistics
 
 Patient-level splits are used throughout to avoid leakage across multiple recordings from the same participant.
 
@@ -76,6 +89,15 @@ After configuration selection:
 - one pooled-device model is trained using the selected configuration
 
 This structure supports within-device, cross-device, and pooled-device comparisons under a consistent pipeline.
+
+```mermaid
+flowchart TD
+    A["Metadata and patient-level splits"] --> B["Within-device grid<br/>3 devices x 2 representations x 6 backbones<br/>36 configs, each with 5-fold CV"]
+    B --> C["Best config selected per device"]
+    C --> D["Final within-device training<br/>3 training runs"]
+    C --> E["Cross-device evaluation<br/>6 eval-only runs"]
+    C --> F["Pooled-device training<br/>1 training run"]
+```
 
 ## Setup
 Python 3.10+ is recommended.
@@ -171,16 +193,10 @@ python -m src.training.train \
 Use `colab_pipeline.ipynb` for a guided end-to-end run on Google Colab.
 
 ## Preliminary Experiments
-These earlier repositories helped define the scope of the final project:
+These earlier repositories were completed to help me define the scope of this final project:
 - [Multi-Task vs Single-Task Modeling for PCG Analysis](https://github.com/anywheredoor/pcg_experiment_1)
 - [PCG-Only Baseline for Reduced LVEF Detection (ViT-B/16)](https://github.com/anywheredoor/pcg_experiment_2)
 - [Phonocardiogram MIL Pipeline for Reduced LVEF Screening](https://github.com/anywheredoor/pcg_experiment_3)
-
-## Notes on Reproducibility
-- Primary training entrypoint: `src/training/train.py`
-- Primary early-stopping metric during training: positive-class F1 on validation data
-- Cross-validation configuration selection uses mean test `F1_pos` across folds
-- Cross-validation and final evaluation use patient-level splits to avoid leakage across recordings from the same patient
 
 ## Citation
 Citation metadata is provided in `CITATION.cff`.
