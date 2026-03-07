@@ -11,6 +11,8 @@ The project studies reduced left ventricular ejection fraction (LVEF) detection 
 
 The task is binary classification: reduced LVEF (`EF <= 40%`) versus non-reduced LVEF (`EF > 40%`).
 
+This repository is intended for research and educational use only, not for clinical deployment.
+
 ## Table of Contents
 - [Data Source and Study Context](#data-source-and-study-context)
 - [Repository Layout](#repository-layout)
