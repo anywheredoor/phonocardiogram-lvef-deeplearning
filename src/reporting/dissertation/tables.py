@@ -12,9 +12,15 @@ import numpy as np
 import pandas as pd
 
 from src.reporting.dissertation.common import (
+    DEVICE_ORDER,
     EXPERIMENT_LABELS,
     METRIC_COLS,
+    _assemble_pooled_test_predictions_for_best_within_model,
+    _compute_binary_metrics_from_prob,
     _device_or_all_categorical,
+    _load_predictions_file,
+    _patient_cluster_bootstrap_threshold_metrics,
+    _pretty_device,
     _sort_by_device_columns,
 )
 
@@ -125,6 +131,145 @@ def build_raw_dataset_summary_table(
         ("Audio format", f"WAV, {channel_text}, {sample_rate_text} sampling rate"),
     ]
     return pd.DataFrame(rows, columns=["Attribute", "Details"])
+
+
+def build_shared_training_settings_table() -> pd.DataFrame:
+    rows = [
+        ("Loss function", "BCEWithLogitsLoss"),
+        ("Optimizer", "AdamW"),
+        ("Initial learning rate", "1e-4"),
+        ("Weight decay", "1e-4"),
+        ("Batch size", "32"),
+        ("Learning-rate scheduler", "Cosine annealing"),
+        ("Minimum learning rate", "1e-6"),
+        ("Warmup epochs", "5"),
+        ("Early stopping", "Patience 15 epochs"),
+    ]
+    return pd.DataFrame(rows, columns=["Setting", "Specification"])
+
+
+def _format_pct_ci(point: float, low: float, high: float) -> str:
+    if any(pd.isna(v) for v in [point, low, high]):
+        return "NA"
+    return f"{point * 100:.1f} ({low * 100:.1f}-{high * 100:.1f})"
+
+
+def _resolve_threshold(default_threshold: object, pred_df: pd.DataFrame | None) -> float:
+    if pd.notna(default_threshold):
+        return float(default_threshold)
+    if pred_df is not None and not pred_df.empty and "threshold" in pred_df.columns:
+        thr = pd.to_numeric(pred_df["threshold"], errors="coerce").dropna()
+        if not thr.empty:
+            return float(thr.iloc[0])
+    return 0.5
+
+
+def build_pooled_test_performance_table(
+    views: Dict[str, pd.DataFrame],
+    results_run_dir: Path,
+) -> pd.DataFrame:
+    final_overall = views.get("final_overall", pd.DataFrame()).copy()
+    pool_overall = views.get("pool_overall", pd.DataFrame()).copy()
+    if final_overall.empty or pool_overall.empty or not results_run_dir.exists():
+        return pd.DataFrame()
+
+    rows: List[Dict[str, str]] = []
+
+    pool_row = pool_overall.iloc[0]
+    pool_run_name = str(pool_row["run_name"])
+    pool_pred = _load_predictions_file(results_run_dir, pool_run_name, split="test")
+    if pool_pred is not None and not pool_pred.empty:
+        pool_threshold = _resolve_threshold(pool_row.get("tuned_threshold", np.nan), pool_pred)
+        pool_metrics = _compute_binary_metrics_from_prob(
+            pool_pred["label"].to_numpy(dtype=int),
+            pool_pred["prob"].to_numpy(dtype=float),
+            threshold=pool_threshold,
+        )
+        pool_boot = _patient_cluster_bootstrap_threshold_metrics(
+            pool_pred,
+            threshold=pool_threshold,
+        )
+        rows.append(
+            {
+                "Model": "Pooled model trained on all devices",
+                "Tuned threshold": f"{pool_threshold:.2f}",
+                "F1, % (95% CI)": _format_pct_ci(
+                    pool_metrics["f1_pos"],
+                    pool_boot["f1_pos_ci95_low"],
+                    pool_boot["f1_pos_ci95_high"],
+                ),
+                "Sensitivity, % (95% CI)": _format_pct_ci(
+                    pool_metrics["sensitivity"],
+                    pool_boot["sensitivity_ci95_low"],
+                    pool_boot["sensitivity_ci95_high"],
+                ),
+                "Specificity, % (95% CI)": _format_pct_ci(
+                    pool_metrics["specificity"],
+                    pool_boot["specificity_ci95_low"],
+                    pool_boot["specificity_ci95_high"],
+                ),
+            }
+        )
+
+    for device in DEVICE_ORDER:
+        row = final_overall[final_overall["train_device_filter"] == device]
+        if row.empty:
+            continue
+        within_row = row.iloc[0]
+        within_run_name = str(within_row["run_name"])
+        pooled_test_pred = _assemble_pooled_test_predictions_for_best_within_model(
+            views=views,
+            results_run_dir=results_run_dir,
+            within_run_name=within_run_name,
+        )
+        if pooled_test_pred is None or pooled_test_pred.empty:
+            continue
+        within_threshold = _resolve_threshold(
+            within_row.get("tuned_threshold", np.nan),
+            pooled_test_pred,
+        )
+        within_metrics = _compute_binary_metrics_from_prob(
+            pooled_test_pred["label"].to_numpy(dtype=int),
+            pooled_test_pred["prob"].to_numpy(dtype=float),
+            threshold=within_threshold,
+        )
+        within_boot = _patient_cluster_bootstrap_threshold_metrics(
+            pooled_test_pred,
+            threshold=within_threshold,
+        )
+        rows.append(
+            {
+                "Model": f"Best-config within-device model trained on {_pretty_device(device)}",
+                "Tuned threshold": f"{within_threshold:.2f}",
+                "F1, % (95% CI)": _format_pct_ci(
+                    within_metrics["f1_pos"],
+                    within_boot["f1_pos_ci95_low"],
+                    within_boot["f1_pos_ci95_high"],
+                ),
+                "Sensitivity, % (95% CI)": _format_pct_ci(
+                    within_metrics["sensitivity"],
+                    within_boot["sensitivity_ci95_low"],
+                    within_boot["sensitivity_ci95_high"],
+                ),
+                "Specificity, % (95% CI)": _format_pct_ci(
+                    within_metrics["specificity"],
+                    within_boot["specificity_ci95_low"],
+                    within_boot["specificity_ci95_high"],
+                ),
+            }
+        )
+
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "Model",
+            "Tuned threshold",
+            "F1, % (95% CI)",
+            "Sensitivity, % (95% CI)",
+            "Specificity, % (95% CI)",
+        ],
+    )
+
 
 def build_summary_tables(
     df: pd.DataFrame,

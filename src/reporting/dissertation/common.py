@@ -27,7 +27,7 @@ from src.models.models import BACKBONE_CONFIGS, create_model
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score
 
 METRIC_COLS = [
     "test_f1_pos",
@@ -391,6 +391,66 @@ def _curve_inputs_from_predictions(df: pd.DataFrame) -> tuple[np.ndarray, np.nda
         return None
     return y_true, y_prob
 
+
+def _assemble_pooled_test_predictions_for_best_within_model(
+    views: Dict[str, pd.DataFrame], results_run_dir: Path, within_run_name: str
+) -> pd.DataFrame | None:
+    parts: List[pd.DataFrame] = []
+
+    within_pred = _load_predictions_file(results_run_dir, within_run_name, split="test")
+    if within_pred is not None and not within_pred.empty:
+        parts.append(within_pred.copy())
+
+    cross_pairwise = views.get("cross_pairwise", pd.DataFrame()).copy()
+    if not cross_pairwise.empty and "source_run_name" in cross_pairwise.columns:
+        eval_runs = (
+            cross_pairwise.loc[
+                cross_pairwise["source_run_name"].astype(str) == within_run_name, "run_name"
+            ]
+            .astype(str)
+            .unique()
+            .tolist()
+        )
+        for eval_run_name in eval_runs:
+            pred = _load_predictions_file(results_run_dir, eval_run_name, split="test")
+            if pred is None or pred.empty:
+                continue
+            parts.append(pred.copy())
+
+    if not parts:
+        return None
+
+    merged = pd.concat(parts, ignore_index=True)
+    dedup_cols = [c for c in ["patient_id", "path", "device", "label"] if c in merged.columns]
+    if dedup_cols:
+        merged = merged.drop_duplicates(subset=dedup_cols, keep="first").reset_index(drop=True)
+    else:
+        merged = merged.drop_duplicates().reset_index(drop=True)
+
+    return _coerce_binary_prediction_df(merged)
+
+
+def _compute_binary_metrics_from_prob(
+    y_true: np.ndarray, y_prob: np.ndarray, threshold: float
+) -> Dict[str, float]:
+    labels = np.asarray(y_true).astype(int)
+    probs = np.asarray(y_prob, dtype=float).clip(0.0, 1.0)
+    preds = (probs >= float(threshold)).astype(int)
+
+    f1_pos = f1_score(labels, preds, pos_label=1, zero_division=0)
+    try:
+        tn, fp, fn, tp = confusion_matrix(labels, preds, labels=[0, 1]).ravel()
+    except ValueError:
+        tn = fp = fn = tp = 0
+
+    sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+    return {
+        "f1_pos": float(f1_pos),
+        "sensitivity": float(sensitivity),
+        "specificity": float(specificity),
+    }
+
 def _patient_cluster_bootstrap_auroc(
     df: pd.DataFrame,
     cluster_col: str = "patient_id",
@@ -467,6 +527,105 @@ def _patient_cluster_bootstrap_auroc(
         "auroc_ci95_low": float(ci_low),
         "auroc_ci95_high": float(ci_high),
         "auroc_above_random_95ci": bool(ci_low > 0.5),
+    }
+
+
+def _patient_cluster_bootstrap_threshold_metrics(
+    df: pd.DataFrame,
+    threshold: float,
+    cluster_col: str = "patient_id",
+    n_bootstrap: int = BOOTSTRAP_REPLICATES,
+    seed: int = BOOTSTRAP_RANDOM_SEED,
+) -> Dict[str, object]:
+    required = {cluster_col, "label", "prob"}
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise ValueError(f"Bootstrap threshold metrics require columns: {missing}")
+
+    sub = df.dropna(subset=[cluster_col, "label", "prob"]).copy()
+    if sub.empty or sub["label"].nunique() < 2:
+        return {
+            "bootstrap_unit": f"{cluster_col} (cluster bootstrap)",
+            "bootstrap_replicates_requested": n_bootstrap,
+            "bootstrap_replicates_used": 0,
+            "bootstrap_attempts": 0,
+            "f1_pos_ci95_low": np.nan,
+            "f1_pos_ci95_high": np.nan,
+            "sensitivity_ci95_low": np.nan,
+            "sensitivity_ci95_high": np.nan,
+            "specificity_ci95_low": np.nan,
+            "specificity_ci95_high": np.nan,
+        }
+
+    groups = [
+        (
+            g["label"].to_numpy(dtype=int),
+            g["prob"].to_numpy(dtype=float),
+        )
+        for _, g in sub.groupby(cluster_col, sort=False)
+    ]
+    if not groups:
+        return {
+            "bootstrap_unit": f"{cluster_col} (cluster bootstrap)",
+            "bootstrap_replicates_requested": n_bootstrap,
+            "bootstrap_replicates_used": 0,
+            "bootstrap_attempts": 0,
+            "f1_pos_ci95_low": np.nan,
+            "f1_pos_ci95_high": np.nan,
+            "sensitivity_ci95_low": np.nan,
+            "sensitivity_ci95_high": np.nan,
+            "specificity_ci95_low": np.nan,
+            "specificity_ci95_high": np.nan,
+        }
+
+    rng = np.random.default_rng(seed)
+    boot_f1: List[float] = []
+    boot_sens: List[float] = []
+    boot_spec: List[float] = []
+    attempts = 0
+    max_attempts = max(n_bootstrap * 10, n_bootstrap)
+    n_groups = len(groups)
+
+    while len(boot_f1) < n_bootstrap and attempts < max_attempts:
+        attempts += 1
+        sample_idx = rng.integers(0, n_groups, size=n_groups)
+        y_boot = np.concatenate([groups[i][0] for i in sample_idx])
+        if np.unique(y_boot).size < 2:
+            continue
+        p_boot = np.concatenate([groups[i][1] for i in sample_idx])
+        metrics = _compute_binary_metrics_from_prob(y_boot, p_boot, threshold=threshold)
+        boot_f1.append(metrics["f1_pos"])
+        boot_sens.append(metrics["sensitivity"])
+        boot_spec.append(metrics["specificity"])
+
+    if not boot_f1:
+        return {
+            "bootstrap_unit": f"{cluster_col} (cluster bootstrap)",
+            "bootstrap_replicates_requested": n_bootstrap,
+            "bootstrap_replicates_used": 0,
+            "bootstrap_attempts": attempts,
+            "f1_pos_ci95_low": np.nan,
+            "f1_pos_ci95_high": np.nan,
+            "sensitivity_ci95_low": np.nan,
+            "sensitivity_ci95_high": np.nan,
+            "specificity_ci95_low": np.nan,
+            "specificity_ci95_high": np.nan,
+        }
+
+    f1_low, f1_high = np.quantile(np.asarray(boot_f1, dtype=float), [0.025, 0.975])
+    sens_low, sens_high = np.quantile(np.asarray(boot_sens, dtype=float), [0.025, 0.975])
+    spec_low, spec_high = np.quantile(np.asarray(boot_spec, dtype=float), [0.025, 0.975])
+    return {
+        "bootstrap_unit": f"{cluster_col} (cluster bootstrap)",
+        "bootstrap_replicates_requested": n_bootstrap,
+        "bootstrap_replicates_used": len(boot_f1),
+        "bootstrap_attempts": attempts,
+        "f1_pos_ci95_low": float(f1_low),
+        "f1_pos_ci95_high": float(f1_high),
+        "sensitivity_ci95_low": float(sens_low),
+        "sensitivity_ci95_high": float(sens_high),
+        "specificity_ci95_low": float(spec_low),
+        "specificity_ci95_high": float(spec_high),
     }
 
 def compute_pooled_auroc_by_auscultation_site(

@@ -28,8 +28,8 @@ from src.reporting.dissertation.common import (
     DEVICE_ABBREV,
     DEVICE_ORDER,
     REPRESENTATION_ORDER,
+    _assemble_pooled_test_predictions_for_best_within_model,
     _build_results_prediction_bundle,
-    _coerce_binary_prediction_df,
     _curve_inputs_from_predictions,
     _expected_calibration_error,
     _load_history_file,
@@ -734,43 +734,6 @@ def plot_source_model_transfer_roc_curves(
         figures_dir / "figure_05_source_model_transfer_roc_curves_within_and_cross_device",
         dpi=dpi,
     )
-
-def _assemble_pooled_test_predictions_for_best_within_model(
-    views: Dict[str, pd.DataFrame], results_run_dir: Path, within_run_name: str
-) -> pd.DataFrame | None:
-    parts: List[pd.DataFrame] = []
-
-    within_pred = _load_predictions_file(results_run_dir, within_run_name, split="test")
-    if within_pred is not None and not within_pred.empty:
-        parts.append(within_pred.copy())
-
-    cross_pairwise = views.get("cross_pairwise", pd.DataFrame()).copy()
-    if not cross_pairwise.empty and "source_run_name" in cross_pairwise.columns:
-        eval_runs = (
-            cross_pairwise.loc[
-                cross_pairwise["source_run_name"].astype(str) == within_run_name, "run_name"
-            ]
-            .astype(str)
-            .unique()
-            .tolist()
-        )
-        for eval_run_name in eval_runs:
-            pred = _load_predictions_file(results_run_dir, eval_run_name, split="test")
-            if pred is None or pred.empty:
-                continue
-            parts.append(pred.copy())
-
-    if not parts:
-        return None
-
-    merged = pd.concat(parts, ignore_index=True)
-    dedup_cols = [c for c in ["patient_id", "path", "device", "label"] if c in merged.columns]
-    if dedup_cols:
-        merged = merged.drop_duplicates(subset=dedup_cols, keep="first").reset_index(drop=True)
-    else:
-        merged = merged.drop_duplicates().reset_index(drop=True)
-
-    return _coerce_binary_prediction_df(merged)
 
 def plot_pooled_test_roc_comparison_pooled_vs_best_within_models(
     views: Dict[str, pd.DataFrame], results_run_dir: Path, figures_dir: Path, dpi: int

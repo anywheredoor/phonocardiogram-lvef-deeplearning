@@ -33,7 +33,11 @@ from src.reporting.dissertation.figures import (
     plot_representation_effect_gammatone_minus_mfcc,
     plot_source_model_transfer_roc_curves,
 )
-from src.reporting.dissertation.tables import build_raw_dataset_summary_table
+from src.reporting.dissertation.tables import (
+    build_pooled_test_performance_table,
+    build_raw_dataset_summary_table,
+    build_shared_training_settings_table,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -82,6 +86,8 @@ def write_readme(
     lines.append("")
     lines.append("These dissertation tables and figures were generated automatically from the project data files.")
     lines.append("Table 1 uses `lvef.csv` and `heart_sounds` to summarize the study cohort before signal preprocessing.")
+    lines.append("Table 2 summarizes the shared training settings used across experiments.")
+    lines.append("Table 3 reports pooled-test F1, sensitivity, and specificity for the pooled model and the best-config within-device models.")
     lines.append("Figures 1-4 use aggregate metrics from the summary CSV.")
     lines.append("Figures 5-7 use saved test predictions from `results/first run` (run folders named by `run_name`).")
     lines.append("")
@@ -145,7 +151,12 @@ def generate_outputs(summary_csv: str, output_dir: str, dpi: int, results_run_di
         "table_01_dataset_summary_before_preprocessing.csv": build_raw_dataset_summary_table(
             lvef_csv_path=_REPO_ROOT / "lvef.csv",
             heart_sounds_dir=_REPO_ROOT / "heart_sounds",
-        )
+        ),
+        "table_02_shared_training_settings_used_across_experiments.csv": build_shared_training_settings_table(),
+        "table_03_pooled_test_performance_pooled_vs_best_within_models.csv": build_pooled_test_performance_table(
+            views=views,
+            results_run_dir=Path(results_run_dir) if results_run_dir else Path("__missing__"),
+        ),
     }
 
     _save_csv(run_catalog, metadata_dir / 'run_catalog_classified_from_summary.csv')
