@@ -11,8 +11,12 @@ The project studies reduced left ventricular ejection fraction (LVEF) detection 
 
 The task is binary classification: reduced LVEF (`EF <= 40%`) versus non-reduced LVEF (`EF > 40%`).
 
+## Scope
+- Research code only
+- No raw audio or linked clinical labels are distributed here
+- Not intended for clinical deployment
+
 ## Table of Contents
-- [Scope](#scope)
 - [Data Source and Study Context](#data-source-and-study-context)
 - [Repository Layout](#repository-layout)
 - [Private Data](#private-data)
@@ -24,11 +28,6 @@ The task is binary classification: reduced LVEF (`EF <= 40%`) versus non-reduced
 - [Preliminary Experiments](#preliminary-experiments)
 - [Citation](#citation)
 - [License](#license)
-
-## Scope
-- Research code only
-- No raw audio or linked clinical labels are distributed here
-- Not intended for clinical deployment
 
 ## Data Source and Study Context
 The heart sound and LVEF data used in this project come from a de-identified stratified random sample derived from [ClinicalTrials.gov NCT06070298](https://clinicaltrials.gov/study/NCT06070298). The registered study concerns smartphone-based phonocardiography for murmur detection, whereas this repository focuses on reduced-LVEF screening using the same heart-sound acquisition protocol.
