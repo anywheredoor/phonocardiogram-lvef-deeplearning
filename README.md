@@ -123,8 +123,9 @@ flowchart LR
         WB5["SwinV2-Tiny"]
         WB6["SwinV2-Small"]
     end
-    J1(( ))
-    J2(( ))
+    classDef hidden fill:none,stroke:none,color:none;
+    J1[" "]:::hidden
+    J2[" "]:::hidden
     WD1 --> J1
     WD2 --> J1
     WD3 --> J1
@@ -148,31 +149,31 @@ flowchart LR
 
 ### Cross-device workflow
 ```mermaid
-flowchart LR
-    subgraph SRC["Source models"]
-        direction TB
+flowchart TB
+    subgraph R1[" "]
+        direction LR
         A["Best-config within-device model trained on iPhone"]
-        C["Best-config within-device model trained on Android phone"]
-        E["Best-config within-device model trained on Digital stethoscope"]
+        A1["Evaluate on Android phone"]
+        A2["Evaluate on Digital stethoscope"]
+        A --> A1
+        A --> A2
     end
-    subgraph T1["Target device 1"]
-        direction TB
-        B1["Evaluate on Android phone"]
-        D1["Evaluate on iPhone"]
-        F1["Evaluate on iPhone"]
-    end
-    subgraph T2["Target device 2"]
-        direction TB
+    subgraph R2[" "]
+        direction LR
+        B["Best-config within-device model trained on Android phone"]
+        B1["Evaluate on iPhone"]
         B2["Evaluate on Digital stethoscope"]
-        D2["Evaluate on Digital stethoscope"]
-        F2["Evaluate on Android phone"]
+        B --> B1
+        B --> B2
     end
-    A --> B1
-    A --> B2
-    C --> D1
-    C --> D2
-    E --> F1
-    E --> F2
+    subgraph R3[" "]
+        direction LR
+        C["Best-config within-device model trained on Digital stethoscope"]
+        C1["Evaluate on iPhone"]
+        C2["Evaluate on Android phone"]
+        C --> C1
+        C --> C2
+    end
 ```
 
 ### Pooled-device workflow
