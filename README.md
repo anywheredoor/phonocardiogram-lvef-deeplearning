@@ -103,79 +103,22 @@ This structure supports within-device, cross-device, and pooled-device compariso
 ### Within-device workflow
 ```mermaid
 flowchart LR
-    subgraph WD["Training devices"]
-        direction TB
-        WD1["iPhone"]
-        WD2["Android phone"]
-        WD3["Digital stethoscope"]
-    end
-    subgraph WR["Representations"]
-        direction TB
-        WR1["MFCC"]
-        WR2["Gammatone"]
-    end
-    subgraph WB["Backbones"]
-        direction TB
-        WB1["MobileNetV2"]
-        WB2["MobileNetV3-Large"]
-        WB3["EfficientNet-B0"]
-        WB4["EfficientNetV2-S"]
-        WB5["SwinV2-Tiny"]
-        WB6["SwinV2-Small"]
-    end
-    WD1 --> WR1
-    WD1 --> WR2
-    WD2 --> WR1
-    WD2 --> WR2
-    WD3 --> WR1
-    WD3 --> WR2
-    WR1 --> WB1
-    WR1 --> WB2
-    WR1 --> WB3
-    WR1 --> WB4
-    WR1 --> WB5
-    WR1 --> WB6
-    WR2 --> WB1
-    WR2 --> WB2
-    WR2 --> WB3
-    WR2 --> WB4
-    WR2 --> WB5
-    WR2 --> WB6
-    WB1 --> S["Best config identified for each device"]
-    WB2 --> S
-    WB3 --> S
-    WB4 --> S
-    WB5 --> S
-    WB6 --> S
+    A["Training devices<br/>iPhone<br/>Android phone<br/>Digital stethoscope"]
+    B["Representations<br/>MFCC<br/>Gammatone"]
+    C["Backbones<br/>MobileNetV2<br/>MobileNetV3-Large<br/>EfficientNet-B0<br/>EfficientNetV2-S<br/>SwinV2-Tiny<br/>SwinV2-Small"]
+    D["Best config identified for each device"]
+    A --> B --> C --> D
 ```
 
 ### Cross-device workflow
 ```mermaid
 flowchart TB
-    subgraph R1["iPhone-trained source model"]
-        direction LR
-        A["Best-config within-device model trained on iPhone"]
-        A1["Evaluate on Android phone"]
-        A2["Evaluate on Digital stethoscope"]
-        A --> A1
-        A --> A2
-    end
-    subgraph R2["Android-trained source model"]
-        direction LR
-        B["Best-config within-device model trained on Android phone"]
-        B1["Evaluate on iPhone"]
-        B2["Evaluate on Digital stethoscope"]
-        B --> B1
-        B --> B2
-    end
-    subgraph R3["Digital-stethoscope-trained source model"]
-        direction LR
-        C["Best-config within-device model trained on Digital stethoscope"]
-        C1["Evaluate on iPhone"]
-        C2["Evaluate on Android phone"]
-        C --> C1
-        C --> C2
-    end
+    A["Best-config within-device model trained on iPhone"] --> A1["Evaluate on Android phone"]
+    A --> A2["Evaluate on Digital stethoscope"]
+    B["Best-config within-device model trained on Android phone"] --> B1["Evaluate on iPhone"]
+    B --> B2["Evaluate on Digital stethoscope"]
+    C["Best-config within-device model trained on Digital stethoscope"] --> C1["Evaluate on iPhone"]
+    C --> C2["Evaluate on Android phone"]
 ```
 
 ### Pooled-device workflow
