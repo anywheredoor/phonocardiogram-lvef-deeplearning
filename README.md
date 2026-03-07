@@ -1,10 +1,11 @@
 # Deep Learning Analysis of Smartphone and Digital Stethoscope Phonocardiograms for Detection of Reduced Left Ventricular Ejection Fraction
 
-This repository contains the code used for a final-year research project on phonocardiogram-based detection of reduced left ventricular ejection fraction (LVEF).
+This repository contains the code for a final-year research project in the Bachelor of Biomedical Sciences programme, Li Ka Shing Faculty of Medicine, The University of Hong Kong.
 
-The study compares:
-- device-specific versus pooled-device training
-- within-device versus cross-device generalization
+The project studies reduced left ventricular ejection fraction (LVEF) detection from phonocardiograms (PCGs) using deep learning. The main comparisons are:
+- within-device training and evaluation
+- cross-device transfer
+- pooled-device training
 - MFCC versus gammatone representations
 - lightweight CNN backbones versus Swin Transformer backbones
 
@@ -15,15 +16,66 @@ The task is binary classification: reduced LVEF (`EF <= 40%`) versus non-reduced
 - No raw audio or linked clinical labels are distributed here
 - Not intended for clinical deployment
 
+## Data Source and Study Context
+The heart sound and LVEF data used in this project come from a de-identified stratified random sample derived from [ClinicalTrials.gov NCT06070298](https://clinicaltrials.gov/study/NCT06070298). The registered study concerns smartphone-based phonocardiography for murmur detection, whereas this repository focuses on reduced-LVEF screening using the same heart-sound acquisition protocol.
+
+High-level study context shared with the registered study:
+- observational study approved by the Institutional Review Board of the University of Hong Kong / Hospital Authority Hong Kong West Cluster
+- adult cardiology outpatients aged 22 years or above who had undergone echocardiography within 3 years
+- exclusion of participants with implanted active medical devices in the torso
+- recordings collected by research personnel during routine clinic or day-centre visits after consent
+- intended acquisition at the 4 standard cardiac auscultation sites using 3 devices: iPhone, Android phone, and a digital stethoscope
+- up to 12 recordings per participant (`4 sites x 3 devices`), although some participants have fewer or more recordings
+- real-world public hospital recording conditions rather than a controlled acoustic environment
+
+The subset used for this project contains WAV heart-sound recordings plus an LVEF CSV. It does not include additional clinical covariates such as age, sex, or BMI.
+
 ## Repository Layout
-- `src/data/`: metadata building, split generation, quality checks, feature-statistics utilities
+- `src/data/`: metadata building, split generation, quality checks, and feature-statistics utilities
 - `src/datasets/`: dataset loading and on-the-fly time-frequency feature generation
 - `src/models/`: model factory and backbone definitions
 - `src/training/`: training and evaluation entrypoint
 - `src/experiments/`: cross-validation runner and best-configuration selection
-- `src/reporting/dissertation/`: dissertation figure/table generation utilities
-- `scripts/make_dissertation_outputs.py`: dissertation reporting entrypoint
-- `colab_pipeline.ipynb`: notebook workflow used for the main experiments
+- `colab_pipeline.ipynb`: guided end-to-end workflow for Google Colab
+
+## Private Data
+This repository expects local access to private study data, but those files are intentionally excluded from version control.
+
+Expected local inputs:
+- `heart_sounds/` with per-patient WAV files
+- `lvef.csv` with `patient_id` and `ef`
+
+The following are gitignored by default:
+- raw audio and label files
+- generated metadata and split files
+- checkpoints, results, and reports
+- other derived artifacts
+
+## Preprocessing
+The training pipeline performs feature generation on the fly.
+
+At a high level, each recording is:
+- loaded from WAV
+- resampled to the target sampling rate (default: 2 kHz)
+- band-pass filtered (`20-800 Hz`)
+- cropped or padded to a fixed duration (default: 4 s)
+- converted to either MFCC or gammatone representation
+- resized to the requested image size for ImageNet-pretrained backbones
+- optionally normalized using training-set feature statistics
+
+Patient-level splits are used throughout to avoid leakage across multiple recordings from the same participant.
+
+## Experiment Workflow
+The main experiment grid covers:
+- `3 devices x 2 representations x 6 backbones = 36` within-device configurations
+- each configuration evaluated with 5-fold cross-validation
+
+After configuration selection:
+- one final checkpoint is trained per device using the selected configuration (`3` training runs)
+- each best-config device model is evaluated on the other two devices (`6` eval-only runs)
+- one pooled-device model is trained using the selected configuration
+
+This structure supports within-device, cross-device, and pooled-device comparisons under a consistent pipeline.
 
 ## Setup
 Python 3.10+ is recommended.
@@ -39,19 +91,6 @@ pip install -r requirements-lock.txt
 ```
 
 If you need GPU support, install a compatible PyTorch build first, then install the remaining packages.
-
-## Private Data
-This repository expects local access to private study data, but those files are intentionally excluded from version control.
-
-Expected local inputs:
-- `heart_sounds/` with per-patient WAV files
-- `lvef.csv` with `patient_id` and `ef`
-
-The following are gitignored by default:
-- raw audio and label files
-- generated metadata and split files
-- checkpoints, results, and reports
-- dissertation summary outputs and other derived artifacts
 
 ## Typical Workflow
 Build metadata:
@@ -128,21 +167,20 @@ python -m src.training.train \
   --results_dir results
 ```
 
-Generate dissertation-ready figures and tables from a local `summary.csv` and saved run outputs:
-```bash
-python3 scripts/make_dissertation_outputs.py \
-  --summary_csv summary.csv \
-  --output_dir reports/dissertation_summary_outputs \
-  --results_run_dir "results/first run" \
-  --dpi 300
-```
+## Google Colab
+Use `colab_pipeline.ipynb` for a guided end-to-end run on Google Colab.
+
+## Preliminary Experiments
+These earlier repositories helped define the scope of the final project:
+- [Multi-Task vs Single-Task Modeling for PCG Analysis](https://github.com/anywheredoor/pcg_experiment_1)
+- [PCG-Only Baseline for Reduced LVEF Detection (ViT-B/16)](https://github.com/anywheredoor/pcg_experiment_2)
+- [Phonocardiogram MIL Pipeline for Reduced LVEF Screening](https://github.com/anywheredoor/pcg_experiment_3)
 
 ## Notes on Reproducibility
 - Primary training entrypoint: `src/training/train.py`
 - Primary early-stopping metric during training: positive-class F1 on validation data
-- Cross-validation config selection uses mean test `F1_pos` across folds
-- Cross-validation and final evaluation are patient-level split to avoid leakage across recordings from the same patient
-- The dissertation reporting code reads locally generated summaries and prediction files; it does not bundle sensitive data into the repository
+- Cross-validation configuration selection uses mean test `F1_pos` across folds
+- Cross-validation and final evaluation use patient-level splits to avoid leakage across recordings from the same patient
 
 ## Citation
 Citation metadata is provided in `CITATION.cff`.
