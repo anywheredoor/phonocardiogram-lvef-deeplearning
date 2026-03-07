@@ -20,7 +20,6 @@ This repository is intended for research and educational use only, not for clini
 - [Preprocessing](#preprocessing)
 - [Experiment Workflow](#experiment-workflow)
 - [Typical Workflow](#typical-workflow)
-- [Google Colab](#google-colab)
 - [Preliminary Experiments](#preliminary-experiments)
 - [Citation](#citation)
 - [License](#license)
@@ -74,6 +73,8 @@ pip install -r requirements-lock.txt
 
 If you need GPU support, install a compatible PyTorch build first, then install the remaining packages.
 
+Using `colab_pipeline.ipynb` on Google Colab is highly recommended for a guided end-to-end run, especially if local GPU resources are limited.
+
 ## Preprocessing
 The training pipeline performs feature generation on the fly.
 
@@ -102,52 +103,67 @@ This structure supports within-device, cross-device, and pooled-device compariso
 ### Within-device workflow
 ```mermaid
 flowchart LR
-    A["Metadata and patient-level splits"] --> WCV
-    subgraph W["Within-device model selection"]
-        direction LR
-        subgraph WD["Training devices"]
-            direction TB
-            WD1["iPhone"]
-            WD2["Android phone"]
-            WD3["Digital stethoscope"]
-        end
-        subgraph WR["Representations"]
-            direction TB
-            WR1["MFCC"]
-            WR2["Gammatone"]
-        end
-        subgraph WB["Backbones"]
-            direction TB
-            WB1["MobileNetV2"]
-            WB2["MobileNetV3-Large"]
-            WB3["EfficientNet-B0"]
-            WB4["EfficientNetV2-S"]
-            WB5["SwinV2-Tiny"]
-            WB6["SwinV2-Small"]
-        end
-        WD --> WR --> WB --> WCV["36 within-device configs<br/>5-fold CV each"]
+    subgraph WD["Training devices"]
+        direction TB
+        WD1["iPhone"]
+        WD2["Android phone"]
+        WD3["Digital stethoscope"]
     end
-    WCV --> S["Best config selected per device"]
-    S --> F["Final within-device training<br/>3 training runs"]
+    subgraph WR["Representations"]
+        direction TB
+        WR1["MFCC"]
+        WR2["Gammatone"]
+    end
+    subgraph WB["Backbones"]
+        direction TB
+        WB1["MobileNetV2"]
+        WB2["MobileNetV3-Large"]
+        WB3["EfficientNet-B0"]
+        WB4["EfficientNetV2-S"]
+        WB5["SwinV2-Tiny"]
+        WB6["SwinV2-Small"]
+    end
+    WD1 --> WR1
+    WD1 --> WR2
+    WD2 --> WR1
+    WD2 --> WR2
+    WD3 --> WR1
+    WD3 --> WR2
+    WR1 --> WB1
+    WR1 --> WB2
+    WR1 --> WB3
+    WR1 --> WB4
+    WR1 --> WB5
+    WR1 --> WB6
+    WR2 --> WB1
+    WR2 --> WB2
+    WR2 --> WB3
+    WR2 --> WB4
+    WR2 --> WB5
+    WR2 --> WB6
+    WB1 --> S["Best config identified for each device"]
+    WB2 --> S
+    WB3 --> S
+    WB4 --> S
+    WB5 --> S
+    WB6 --> S
 ```
 
 ### Cross-device workflow
 ```mermaid
 flowchart LR
-    A["Best-config model trained on iPhone"] --> B1["Evaluate on Android phone"]
+    A["Best-config within-device model trained on iPhone"] --> B1["Evaluate on Android phone"]
     A --> B2["Evaluate on Digital stethoscope"]
-    C["Best-config model trained on Android phone"] --> D1["Evaluate on iPhone"]
+    C["Best-config within-device model trained on Android phone"] --> D1["Evaluate on iPhone"]
     C --> D2["Evaluate on Digital stethoscope"]
-    E["Best-config model trained on Digital stethoscope"] --> F1["Evaluate on iPhone"]
+    E["Best-config within-device model trained on Digital stethoscope"] --> F1["Evaluate on iPhone"]
     E --> F2["Evaluate on Android phone"]
 ```
 
 ### Pooled-device workflow
 ```mermaid
 flowchart LR
-    A["Metadata and patient-level splits"] --> B["All devices combined"]
-    B --> C["Selected configuration"]
-    C --> D["Pooled-device training<br/>1 training run"]
+    A["Best-config pooled-device model trained on all devices"] --> B["Evaluate on pooled test set"]
 ```
 
 ## Typical Workflow
@@ -224,9 +240,6 @@ python -m src.training.train \
   --save_predictions \
   --results_dir results
 ```
-
-## Google Colab
-Use `colab_pipeline.ipynb` for a guided end-to-end run on Google Colab.
 
 ## Preliminary Experiments
 These earlier repositories were completed to help me define the scope of this final project:
