@@ -17,9 +17,9 @@ This repository is intended for research and educational use only, not for clini
 - [Data Source and Study Context](#data-source-and-study-context)
 - [Repository Layout](#repository-layout)
 - [Setup](#setup)
-- [Preprocessing](#preprocessing)
-- [Experiment Workflow](#experiment-workflow)
-- [Typical Workflow](#typical-workflow)
+- [Data Preprocessing](#data-preprocessing)
+- [Study Workflow](#study-workflow)
+- [Command-Line Workflow](#command-line-workflow)
 - [Preliminary Experiments](#preliminary-experiments)
 - [Citation](#citation)
 - [License](#license)
@@ -75,7 +75,7 @@ If you need GPU support, install a compatible PyTorch build first, then install 
 
 Using `colab_pipeline.ipynb` on Google Colab is highly recommended for a guided end-to-end run, especially if local GPU resources are limited.
 
-## Preprocessing
+## Data Preprocessing
 The training pipeline performs feature generation on the fly.
 
 At a high level, each recording is:
@@ -88,7 +88,7 @@ At a high level, each recording is:
 
 Patient-level splits are used throughout to avoid leakage across multiple recordings from the same participant.
 
-## Experiment Workflow
+## Study Workflow
 The main experiment grid covers:
 - `3 devices x 2 representations x 6 backbones = 36` within-device configurations
 - each configuration evaluated with 5-fold cross-validation
@@ -123,24 +123,21 @@ flowchart LR
         WB5["SwinV2-Tiny"]
         WB6["SwinV2-Small"]
     end
-    WD1 --> WR1
-    WD1 --> WR2
-    WD2 --> WR1
-    WD2 --> WR2
-    WD3 --> WR1
-    WD3 --> WR2
-    WR1 --> WB1
-    WR1 --> WB2
-    WR1 --> WB3
-    WR1 --> WB4
-    WR1 --> WB5
-    WR1 --> WB6
-    WR2 --> WB1
-    WR2 --> WB2
-    WR2 --> WB3
-    WR2 --> WB4
-    WR2 --> WB5
-    WR2 --> WB6
+    J1(( ))
+    J2(( ))
+    WD1 --> J1
+    WD2 --> J1
+    WD3 --> J1
+    J1 --> WR1
+    J1 --> WR2
+    WR1 --> J2
+    WR2 --> J2
+    J2 --> WB1
+    J2 --> WB2
+    J2 --> WB3
+    J2 --> WB4
+    J2 --> WB5
+    J2 --> WB6
     WB1 --> S["Best config identified for each device"]
     WB2 --> S
     WB3 --> S
@@ -152,12 +149,30 @@ flowchart LR
 ### Cross-device workflow
 ```mermaid
 flowchart LR
-    A["Best-config within-device model trained on iPhone"] --> B1["Evaluate on Android phone"]
-    A --> B2["Evaluate on Digital stethoscope"]
-    C["Best-config within-device model trained on Android phone"] --> D1["Evaluate on iPhone"]
-    C --> D2["Evaluate on Digital stethoscope"]
-    E["Best-config within-device model trained on Digital stethoscope"] --> F1["Evaluate on iPhone"]
-    E --> F2["Evaluate on Android phone"]
+    subgraph SRC["Source models"]
+        direction TB
+        A["Best-config within-device model trained on iPhone"]
+        C["Best-config within-device model trained on Android phone"]
+        E["Best-config within-device model trained on Digital stethoscope"]
+    end
+    subgraph T1["Target device 1"]
+        direction TB
+        B1["Evaluate on Android phone"]
+        D1["Evaluate on iPhone"]
+        F1["Evaluate on iPhone"]
+    end
+    subgraph T2["Target device 2"]
+        direction TB
+        B2["Evaluate on Digital stethoscope"]
+        D2["Evaluate on Digital stethoscope"]
+        F2["Evaluate on Android phone"]
+    end
+    A --> B1
+    A --> B2
+    C --> D1
+    C --> D2
+    E --> F1
+    E --> F2
 ```
 
 ### Pooled-device workflow
@@ -166,7 +181,7 @@ flowchart LR
     A["Best-config pooled-device model trained on all devices"] --> B["Evaluate on pooled test set"]
 ```
 
-## Typical Workflow
+## Command-Line Workflow
 Build metadata:
 ```bash
 python -m src.data.build_metadata \
