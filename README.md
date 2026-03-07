@@ -19,7 +19,7 @@ This repository is intended for research and educational use only, not for clini
 - [Setup](#setup)
 - [Data Preprocessing](#data-preprocessing)
 - [Study Workflow](#study-workflow)
-- [Command-Line Workflow](#command-line-workflow)
+- [Command-Line Usage](#command-line-usage)
 - [Preliminary Experiments](#preliminary-experiments)
 - [Citation](#citation)
 - [License](#license)
@@ -141,7 +141,7 @@ flowchart LR
     D["Best-config within-device model trained on Digital stethoscope"] --> E
 ```
 
-## Command-Line Workflow
+## Command-Line Usage
 Build metadata:
 ```bash
 python -m src.data.build_metadata \
