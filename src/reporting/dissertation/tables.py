@@ -304,24 +304,29 @@ def build_discrimination_vs_random_baseline_table(bootstrap_df: pd.DataFrame) ->
     out = pd.DataFrame(
         {
             "Model": table_df["evaluation_label"].astype(str),
-            "AUROC (95% CI)": [
-                _format_ci(v, lo, hi)
+            "AUROC - 0.5 (95% CI)": [
+                _format_ci(v - 0.5, lo, hi)
                 for v, lo, hi in zip(
                     table_df["auroc"],
-                    table_df["auroc_ci95_low"],
-                    table_df["auroc_ci95_high"],
+                    table_df["delta_auroc_vs_random_ci95_low"],
+                    table_df["delta_auroc_vs_random_ci95_high"],
                 )
             ],
-            "Above 0.5 under 95% CI": table_df["auroc_above_random_95ci"].map({True: "Yes", False: "No"}),
-            "AUPRC (95% CI)": [
-                _format_ci(v, lo, hi)
-                for v, lo, hi in zip(
+            "95% CI above AUROC baseline?": table_df["auroc_above_random_95ci"].map(
+                {True: "Yes", False: "No"}
+            ),
+            "AUPRC - prevalence (95% CI)": [
+                _format_ci(v - prev, lo, hi)
+                for v, prev, lo, hi in zip(
                     table_df["auprc"],
-                    table_df["auprc_ci95_low"],
-                    table_df["auprc_ci95_high"],
+                    table_df["prevalence_records"],
+                    table_df["delta_auprc_vs_random_prevalence_ci95_low"],
+                    table_df["delta_auprc_vs_random_prevalence_ci95_high"],
                 )
             ],
-            "Above prevalence under 95% CI": table_df["auprc_above_random_95ci"].map({True: "Yes", False: "No"}),
+            "95% CI above AUPRC baseline?": table_df["auprc_above_random_95ci"].map(
+                {True: "Yes", False: "No"}
+            ),
         }
     )
     return out
