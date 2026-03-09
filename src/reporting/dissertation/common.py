@@ -100,6 +100,12 @@ EXPERIMENT_LABELS = {
 def _pretty_device(device: str) -> str:
     return DEVICE_LABELS.get(device, device)
 
+
+def _pretty_device_after_trained_on(device: str) -> str:
+    if device == "digital_stethoscope":
+        return "digital stethoscope"
+    return _pretty_device(device)
+
 def _device_categorical(series: pd.Series) -> pd.Categorical:
     return pd.Categorical(series.astype(str), categories=DEVICE_ORDER, ordered=True)
 
@@ -784,11 +790,48 @@ def compute_test_discrimination_vs_random_baseline(
         rows.append(
             {
                 "evaluation_group": "final_within",
-                "evaluation_label": f"Best-config within-device (same-device test set): {_pretty_device(device)}",
+                "evaluation_label": (
+                    f"Best-config within-device model trained on {_pretty_device_after_trained_on(device)} "
+                    "(same-device test set)"
+                ),
                 "run_name": run_name,
                 "source_run_name": "",
                 "source_device": device,
                 "target_device": device,
+                "n_records": int(len(pred)),
+                "n_patients": int(pred["patient_id"].nunique()),
+                "n_positive_records": int(pred["label"].sum()),
+                "prevalence_records": float(pred["label"].mean()),
+                "auroc": float(roc_auc_score(pred["label"].astype(int), pred["prob"].astype(float))),
+                "auprc": float(average_precision_score(pred["label"].astype(int), pred["prob"].astype(float))),
+                "random_auroc_baseline": 0.5,
+                "random_auprc_baseline": float(pred["label"].mean()),
+                **_patient_cluster_bootstrap_discrimination_vs_random(pred, cluster_col="patient_id"),
+                }
+            )
+
+    for device in DEVICE_ORDER:
+        row = final_overall[final_overall["train_device_filter"] == device]
+        if row.empty:
+            continue
+        result_row = row.iloc[0]
+        run_name = str(result_row["run_name"])
+        pred = _assemble_pooled_test_predictions_for_best_within_model(views, results_run_dir, run_name)
+        if pred is None or pred.empty:
+            continue
+        pred = pred.copy()
+        pred["patient_id"] = pred["patient_id"].astype(str)
+        rows.append(
+            {
+                "evaluation_group": "final_within_pooled_test",
+                "evaluation_label": (
+                    f"Best-config within-device model trained on {_pretty_device_after_trained_on(device)} "
+                    "(pooled test set)"
+                ),
+                "run_name": run_name,
+                "source_run_name": "",
+                "source_device": device,
+                "target_device": "all_devices",
                 "n_records": int(len(pred)),
                 "n_patients": int(pred["patient_id"].nunique()),
                 "n_positive_records": int(pred["label"].sum()),
@@ -851,7 +894,7 @@ def compute_test_discrimination_vs_random_baseline(
             rows.append(
                 {
                     "evaluation_group": "pool_overall",
-                    "evaluation_label": "Pooled-device: overall",
+                    "evaluation_label": "Pooled model trained on all devices (pooled test set)",
                     "run_name": run_name,
                     "source_run_name": "",
                     "source_device": "pooled_all_devices",

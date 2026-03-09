@@ -23,6 +23,7 @@ from src.reporting.dissertation.common import (
     _curve_inputs_from_predictions,
     _load_predictions_file,
     _pretty_device,
+    _pretty_device_after_trained_on,
     _save_fig,
 )
 
@@ -622,7 +623,7 @@ def plot_source_model_transfer_roc_curves(
         legend_handles: List[plt.Line2D] = []
         legend_labels: List[str] = []
 
-        source_label = _pretty_device(source_device)
+        source_label = _pretty_device_after_trained_on(source_device)
         ax.set_title(f"Best-config within-device model\ntrained on {source_label}")
 
         # Within-device curve from final run.
@@ -796,7 +797,10 @@ def plot_pooled_test_roc_comparison_pooled_vs_best_within_models(
         curves.append(
             {
                 "key": device,
-                "label_base": f"Best-config within-device model trained on {_pretty_device(device)}",
+                "label_base": (
+                    f"Best-config within-device model trained on "
+                    f"{_pretty_device_after_trained_on(device)}"
+                ),
                 "y_true": y_true,
                 "y_prob": y_prob,
                 "color": model_colors.get(device, "#666666"),

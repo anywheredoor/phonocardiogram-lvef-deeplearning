@@ -18,6 +18,7 @@ from src.reporting.dissertation.common import (
     _load_predictions_file,
     _patient_cluster_bootstrap_threshold_metrics,
     _pretty_device,
+    _pretty_device_after_trained_on,
 )
 
 _RAW_DEVICE_LABELS = {
@@ -235,7 +236,10 @@ def build_pooled_test_performance_table(
         )
         rows.append(
             {
-                "Model": f"Best-config within-device model trained on {_pretty_device(device)}",
+                "Model": (
+                    "Best-config within-device model trained on "
+                    f"{_pretty_device_after_trained_on(device)}"
+                ),
                 "Tuned threshold": f"{within_threshold:.2f}",
                 "F1, % (95% CI)": _format_pct_ci(
                     within_metrics["f1_pos"],
@@ -278,9 +282,16 @@ def build_discrimination_vs_random_baseline_table(bootstrap_df: pd.DataFrame) ->
     if bootstrap_df.empty:
         return pd.DataFrame()
 
-    order = {"final_within": 0, "cross_pairwise": 1, "pool_overall": 2}
+    order = {
+        "final_within": 0,
+        "cross_pairwise": 1,
+        "pool_overall": 2,
+        "final_within_pooled_test": 3,
+    }
     table_df = bootstrap_df[
-        bootstrap_df["evaluation_group"].isin(["final_within", "cross_pairwise", "pool_overall"])
+        bootstrap_df["evaluation_group"].isin(
+            ["final_within", "final_within_pooled_test", "cross_pairwise", "pool_overall"]
+        )
     ].copy()
     if table_df.empty:
         return pd.DataFrame()
@@ -303,7 +314,7 @@ def build_discrimination_vs_random_baseline_table(bootstrap_df: pd.DataFrame) ->
 
     out = pd.DataFrame(
         {
-            "Model": table_df["evaluation_label"].astype(str),
+            "Model and evaluation setting": table_df["evaluation_label"].astype(str),
             "AUROC - 0.5 (95% CI)": [
                 _format_ci(v - 0.5, lo, hi)
                 for v, lo, hi in zip(
@@ -313,18 +324,6 @@ def build_discrimination_vs_random_baseline_table(bootstrap_df: pd.DataFrame) ->
                 )
             ],
             "95% CI above AUROC baseline?": table_df["auroc_above_random_95ci"].map(
-                {True: "Yes", False: "No"}
-            ),
-            "AUPRC - prevalence (95% CI)": [
-                _format_ci(v - prev, lo, hi)
-                for v, prev, lo, hi in zip(
-                    table_df["auprc"],
-                    table_df["prevalence_records"],
-                    table_df["delta_auprc_vs_random_prevalence_ci95_low"],
-                    table_df["delta_auprc_vs_random_prevalence_ci95_high"],
-                )
-            ],
-            "95% CI above AUPRC baseline?": table_df["auprc_above_random_95ci"].map(
                 {True: "Yes", False: "No"}
             ),
         }
