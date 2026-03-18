@@ -5,6 +5,7 @@ Create repeated, stratified patient-level CV splits from metadata.csv.
 Outputs:
   - output_dir/repeat_XX/fold_YY/metadata_{train,val,test}.csv
   - output_dir/repeat_XX/fold_YY/patient_splits.csv
+  - output_dir/repeat_XX/fold_YY/metadata_with_splits.csv
   - output_dir/index.csv (paths + label counts per fold)
 """
 

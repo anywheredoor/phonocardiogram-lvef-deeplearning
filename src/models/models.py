@@ -33,7 +33,7 @@ def create_model(
     num_classes: int = 1,
 ) -> nn.Module:
     """
-    Create an ImageNet-pretrained model with a single-logit head.
+    Create a timm vision backbone configured for the requested output size.
 
     Args:
         backbone: Friendly backbone name (see BACKBONE_CONFIGS).

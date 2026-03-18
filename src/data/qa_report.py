@@ -55,7 +55,10 @@ def parse_args() -> argparse.Namespace:
         "--fixed_duration",
         type=float,
         default=None,
-        help="Fixed duration in seconds to flag short recordings.",
+        help=(
+            "Fixed duration in seconds used to summarize how many recordings "
+            "are shorter than the target length."
+        ),
     )
     parser.add_argument(
         "--max_files",

@@ -371,7 +371,7 @@ def plot_cv_performance_vs_parameter_tradeoff(
                     zorder=point_zorder,
                 )
 
-        # Highlight the selected best config (same selection as table_03 / Figure 1).
+        # Highlight the selected best config used throughout the within-device reporting.
         best_row = cv_best[cv_best["train_device_filter"] == device]
         if not best_row.empty:
             best_backbone = str(best_row.iloc[0]["backbone"])

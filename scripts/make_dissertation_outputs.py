@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate dissertation-ready figures and tables from summary.csv."""
+"""Generate dissertation-ready figures and tables from summary.csv plus project data files."""
 
 from __future__ import annotations
 
@@ -44,7 +44,10 @@ from src.reporting.dissertation.tables import (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Create dissertation figures/tables from summary.csv."
+        description=(
+            "Create dissertation figures/tables from summary.csv, project data files, "
+            "and saved prediction outputs."
+        )
     )
     parser.add_argument(
         "--summary_csv",
@@ -90,8 +93,9 @@ def write_readme(
     lines.append("Table 1 uses `lvef.csv` and `heart_sounds` to summarize the study cohort before signal preprocessing.")
     lines.append("Table 2 summarizes the shared training settings used across experiments.")
     lines.append("Table 3 reports pooled-test F1, sensitivity, and specificity for the pooled model and the best-config within-device models.")
-    lines.append("Table 4 summarizes whether AUROC and AUPRC remained above their random baselines under 95% patient-cluster bootstrap confidence intervals.")
-    lines.append("Figures 1-4 use aggregate metrics from the summary CSV.")
+    lines.append("Table 4 summarizes whether AUROC remained above the random AUROC baseline under 95% patient-cluster bootstrap confidence intervals.")
+    lines.append("Figure 1 uses backbone parameter counts for the evaluated architectures.")
+    lines.append("Figures 2-4 use aggregate metrics from the summary CSV.")
     lines.append("Figures 5-7 use saved test predictions from `results/first run` (run folders named by `run_name`).")
     lines.append("")
     lines.append("## Summary CSV structure detected")

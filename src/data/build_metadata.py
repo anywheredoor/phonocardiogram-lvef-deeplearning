@@ -6,7 +6,7 @@ Build a metadata table linking each PCG .wav file to:
 - binary EF label (1 if EF <= 40, else 0)
 - device (parsed from filename)
 - auscultation position (parsed from filename)
-- relative file path
+- recording path as written from --heart_dir
 
 Run from the repository root, e.g.:
 
@@ -174,7 +174,7 @@ def build_metadata(
 
             device = DEVICE_MAP.get(device_code, "unknown")
 
-            rel_path = os.path.join(heart_dir, pid, fname)
+            file_path = os.path.join(heart_dir, pid, fname)
 
             rows.append(
                 {
@@ -185,7 +185,7 @@ def build_metadata(
                     "device": device,
                     "position": position,
                     "filename": fname,
-                    "path": rel_path,
+                    "path": file_path,
                 }
             )
 
