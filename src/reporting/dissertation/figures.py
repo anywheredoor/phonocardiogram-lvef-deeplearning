@@ -404,8 +404,8 @@ def plot_cv_performance_vs_parameter_tradeoff(
         sns.despine(ax=ax)
 
     legend_handles = [
-        Patch(facecolor=rep_colors["gammatone"], edgecolor="none", label="Gammatone (blue color filled in symbols)"),
         Patch(facecolor=rep_colors["mfcc"], edgecolor="none", label="MFCC (orange color filled in symbols)"),
+        Patch(facecolor=rep_colors["gammatone"], edgecolor="none", label="Gammatone (blue color filled in symbols)"),
         plt.Line2D([0], [0], color="#1E1E1E", alpha=0.75, lw=1.2, label="Paired Gammatone/MFCC (same backbone)"),
         plt.Line2D(
             [0],
