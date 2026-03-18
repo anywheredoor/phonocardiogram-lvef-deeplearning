@@ -142,6 +142,11 @@ flowchart LR
 ```
 
 ## Command-Line Usage
+The commands below map onto the study workflow as follows:
+- within-device experiments use patient-level cross-validation via `src.experiments.run_cv`, followed by final training with `src.training.train`
+- cross-device experiments reuse a selected within-device checkpoint and run eval-only testing on a different device
+- pooled-device experiments train and evaluate with the same training entrypoint on pooled splits
+
 Build metadata:
 ```bash
 python -m src.data.build_metadata \
