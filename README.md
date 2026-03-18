@@ -5,7 +5,7 @@ This repository contains the code for my final year project for the Bachelor of 
 The project studies reduced left ventricular ejection fraction (LVEF) detection from phonocardiograms (PCGs) using deep learning. The main comparisons are:
 - within-device training and evaluation
 - cross-device transfer
-- pooled-device training
+- pooled-device training and evaluation
 - MFCC versus gammatone representations
 - lightweight CNN backbones versus Swin Transformer backbones
 
@@ -15,13 +15,15 @@ This repository is intended for research and educational use only, not for clini
 
 ---
 
-I am deeply grateful to [Prof. Joshua W. K. Ho](https://www.sbms.hku.hk/staff/joshua-ho) for supervising this project and for helping me see the broader importance of cardiovascular disease research, especially its relevance to real-world clinical problems.
+> I am deeply grateful to [Prof. Joshua W. K. Ho](https://www.sbms.hku.hk/staff/joshua-ho) for supervising this project and for helping me see the broader importance of cardiovascular disease research, especially its relevance to real-world clinical problems.
+>
+> I would like to sincerely thank Dr Chi Yan Ooi for kindly explaining the study setup and the heart-sound data collection process, which gave me a much clearer understanding of the practical background of this work.
+>
+> I am also thankful to Chutong Xiao, a PhD student, for first introducing the dataset to me and for helping me understand its structure and context at an early stage of the project.
+>
+> I am grateful to [Prof. Chun-Ka Wong](https://medic.hku.hk/en/Staff/University-Academic-Staff/Prof-WONG-Chun-Ka/Prof-WONG-Chun-Ka-Profile), whose clinical study provided the foundation for the de-identified data used in this project and made this research possible.
 
-I would like to sincerely thank Dr Chi Yan Ooi for kindly explaining the study setup and the heart-sound data collection process, which gave me a much clearer understanding of the practical background of this work.
-
-I am also thankful to Chutong Xiao, a PhD student, for first introducing the dataset to me and for helping me understand its structure and context at an early stage of the project.
-
-I am grateful to [Prof. Chun-Ka Wong](https://medic.hku.hk/en/Staff/University-Academic-Staff/Prof-WONG-Chun-Ka/Prof-WONG-Chun-Ka-Profile), whose clinical study provided the foundation for the de-identified data used in this project and made this research possible.
+---
 
 ## Table of Contents
 - [Data Source and Study Context](#data-source-and-study-context)
