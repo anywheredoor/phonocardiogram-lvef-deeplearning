@@ -15,7 +15,7 @@ This repository is intended for research and educational use only, not for clini
 
 ---
 
-Acknowledgements
+**Acknowledgements**
 
 I am deeply grateful to **[Prof. Joshua W. K. Ho](https://www.sbms.hku.hk/staff/joshua-ho)** for supervising this project and for helping me see the broader importance of cardiovascular disease research, especially its relevance to real-world clinical problems.
 
@@ -96,7 +96,7 @@ At a high level, each recording is:
 - loaded from WAV
 - resampled to the target sampling rate (default: 2 kHz)
 - band-pass filtered (`20-800 Hz`)
-- center-cropped or zero-padded to a fixed duration (default: 4 s)
+- center-cropped to a fixed duration (default: 4 s; zero-padding is supported when needed)
 - converted to either MFCC or gammatone representation
 - resized to the requested image size for ImageNet-pretrained backbones
 
