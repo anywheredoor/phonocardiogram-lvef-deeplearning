@@ -111,21 +111,18 @@ flowchart TD
 ```
 
 ### Cross-device workflow
-#### iPhone-trained source model
 ```mermaid
 flowchart LR
     A["Best-config within-device model trained on iPhone"] --> A1["Evaluate on Android phone"]
     A --> A2["Evaluate on Digital stethoscope"]
 ```
 
-#### Android-trained source model
 ```mermaid
 flowchart LR
     B["Best-config within-device model trained on Android phone"] --> B1["Evaluate on iPhone"]
     B --> B2["Evaluate on Digital stethoscope"]
 ```
 
-#### Digital-stethoscope-trained source model
 ```mermaid
 flowchart LR
     C["Best-config within-device model trained on Digital stethoscope"] --> C1["Evaluate on iPhone"]
