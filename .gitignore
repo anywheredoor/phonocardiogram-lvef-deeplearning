@@ -37,6 +37,7 @@ dist/
 /checkpoints_cpu/
 /results/
 /reports/
+/dissertation_draft/
 /progress_report/
 /best_config_per_device.csv
 /config_summary_by_device.csv
