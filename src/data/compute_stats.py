@@ -14,12 +14,42 @@ Run from repo root, e.g.:
 
 import argparse
 import json
+from typing import Tuple
 
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.datasets.pcg_dataset import PCGDataset
+
+
+def _make_loader(ds: PCGDataset, batch_size: int, num_workers: int) -> DataLoader:
+    return DataLoader(
+        ds,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=False,
+    )
+
+
+def _stats_from_loader(loader: DataLoader, representation: str) -> Tuple[float, float]:
+    n_pixels = 0
+    sum_ = 0.0
+    sum_sq = 0.0
+
+    for imgs, labels, meta in tqdm(loader, desc=f"{representation}"):
+        # imgs: [B, 3, H, W]
+        imgs = imgs.to(torch.float32)
+        imgs = imgs.reshape(imgs.size(0), -1)  # [B, C*H*W]
+        sum_ += imgs.sum().item()
+        sum_sq += (imgs ** 2).sum().item()
+        n_pixels += imgs.numel()
+
+    mean = sum_ / n_pixels
+    var = (sum_sq / n_pixels) - (mean ** 2)
+    std = var ** 0.5
+    return float(mean), float(std)
 
 
 def parse_args():
@@ -69,8 +99,8 @@ def parse_args():
     parser.add_argument(
         "--num_workers",
         type=int,
-        default=4,
-        help="Number of DataLoader workers (default: 4)",
+        default=0,
+        help="Number of DataLoader workers (default: 0)",
     )
     parser.add_argument(
         "--output_json",
@@ -125,33 +155,21 @@ def compute_mean_std_for_rep(
         clamp=False,
     )
 
-    loader = DataLoader(
-        ds,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=False,
-    )
-
-    n_pixels = 0
-    sum_ = 0.0
-    sum_sq = 0.0
-
-    for imgs, labels, meta in tqdm(loader, desc=f"{representation}"):
-        # imgs: [B, 3, H, W]
-        imgs = imgs.to(torch.float32)
-        # Flatten all dimensions except batch
-        imgs = imgs.reshape(imgs.size(0), -1)  # [B, C*H*W]
-        sum_ += imgs.sum().item()
-        sum_sq += (imgs ** 2).sum().item()
-        n_pixels += imgs.numel()
-
-    mean = sum_ / n_pixels
-    var = (sum_sq / n_pixels) - (mean ** 2)
-    std = var ** 0.5
+    try:
+        loader = _make_loader(ds, batch_size=batch_size, num_workers=num_workers)
+        mean, std = _stats_from_loader(loader, representation=representation)
+    except (RuntimeError, OSError) as exc:
+        if num_workers <= 0:
+            raise
+        print(
+            "Warning: compute_stats failed with "
+            f"num_workers={num_workers} ({exc}). Retrying with num_workers=0."
+        )
+        loader = _make_loader(ds, batch_size=batch_size, num_workers=0)
+        mean, std = _stats_from_loader(loader, representation=representation)
 
     print(f"{representation} -> mean = {mean:.6f}, std = {std:.6f}")
-    return float(mean), float(std)
+    return mean, std
 
 
 def main():

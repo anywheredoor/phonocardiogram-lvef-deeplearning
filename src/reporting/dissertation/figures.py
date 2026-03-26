@@ -6,13 +6,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, List
 
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import seaborn as sns
-from matplotlib.patches import Patch, Rectangle
-from sklearn.metrics import roc_auc_score, roc_curve
-
 from src.reporting.dissertation.common import (
     AUSCULTATION_SITE_ORDER,
     BACKBONE_LABELS,
@@ -26,6 +19,13 @@ from src.reporting.dissertation.common import (
     _pretty_device_after_trained_on,
     _save_fig,
 )
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from matplotlib.patches import Patch, Rectangle
+from sklearn.metrics import roc_auc_score, roc_curve
 
 def _annot_matrix_from_mean_sd(
     mean_mat: pd.DataFrame,
@@ -423,14 +423,6 @@ def plot_cv_performance_vs_parameter_tradeoff(
         handlelength=1.35,
         prop={"size": 9},
     )
-    legend_backbone_order = [
-        "mobilenetv2",
-        "efficientnet_b0",
-        "mobilenetv3_large",
-        "efficientnetv2_s",
-        "swinv2_tiny",
-        "swinv2_small",
-    ]
     backbone_handles = [
         plt.Line2D(
             [0],
@@ -443,7 +435,7 @@ def plot_cv_performance_vs_parameter_tradeoff(
             markersize=backbone_legend_sizes.get(b, 6.3),
             label=BACKBONE_LABELS.get(b, b),
         )
-        for b in legend_backbone_order
+        for b in BACKBONE_ORDER
     ]
     fig.legend(
         handles=backbone_handles,
@@ -470,15 +462,6 @@ def plot_representation_effect_gammatone_minus_mfcc(
 ) -> None:
     if cv_agg.empty:
         return
-    rep_effect_backbone_order = [
-        "mobilenetv2",
-        "efficientnet_b0",
-        "mobilenetv3_large",
-        "efficientnetv2_s",
-        "swinv2_tiny",
-        "swinv2_small",
-    ]
-
     pivot = cv_agg.pivot_table(
         index=["train_device_filter", "backbone"],
         columns="representation",
@@ -489,7 +472,7 @@ def plot_representation_effect_gammatone_minus_mfcc(
     if "gammatone" not in pivot.columns or "mfcc" not in pivot.columns:
         return
     pivot["delta_f1_gammatone_minus_mfcc"] = pivot["gammatone"] - pivot["mfcc"]
-    pivot["backbone"] = pd.Categorical(pivot["backbone"], rep_effect_backbone_order, ordered=True)
+    pivot["backbone"] = pd.Categorical(pivot["backbone"], BACKBONE_ORDER, ordered=True)
     pivot["train_device_filter"] = pd.Categorical(
         pivot["train_device_filter"], DEVICE_ORDER, ordered=True
     )
@@ -501,7 +484,7 @@ def plot_representation_effect_gammatone_minus_mfcc(
         values="delta_f1_gammatone_minus_mfcc",
         aggfunc="first",
         observed=False,
-    ).reindex(index=rep_effect_backbone_order, columns=DEVICE_ORDER)
+    ).reindex(index=BACKBONE_ORDER, columns=DEVICE_ORDER)
     if heat.dropna(how="all").empty:
         return
     heat.index = [BACKBONE_LABELS.get(b, b) for b in heat.index]

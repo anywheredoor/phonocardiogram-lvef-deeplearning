@@ -131,7 +131,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--num_workers",
         type=int,
-        default=4,
+        default=0,
         help="DataLoader workers.",
     )
     parser.add_argument(
@@ -353,6 +353,47 @@ def seed_worker(worker_id: int) -> None:
     worker_seed = torch.initial_seed() % 2**32
     np.random.seed(worker_seed)
     random.seed(worker_seed)
+
+
+def make_dataloader(
+    dataset,
+    batch_size: int,
+    shuffle: bool,
+    num_workers: int,
+    pin_memory: bool,
+    worker_init_fn=None,
+    generator=None,
+    loader_name: str = "DataLoader",
+):
+    def _build(n_workers: int):
+        return DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            num_workers=n_workers,
+            pin_memory=pin_memory,
+            worker_init_fn=worker_init_fn,
+            generator=generator,
+        )
+
+    loader = _build(num_workers)
+    if num_workers <= 0:
+        return loader
+
+    try:
+        iterator = iter(loader)
+        try:
+            next(iterator)
+        except StopIteration:
+            pass
+    except (RuntimeError, OSError) as exc:
+        print(
+            f"Warning: {loader_name} failed with num_workers={num_workers} "
+            f"({exc}). Retrying with num_workers=0."
+        )
+        return _build(0)
+
+    return _build(num_workers)
 
 
 def validate_input_paths(args: argparse.Namespace) -> None:
@@ -814,12 +855,13 @@ def evaluate_by_device(
         if not idxs:
             continue
         subset = Subset(test_ds, idxs)
-        loader = DataLoader(
+        loader = make_dataloader(
             subset,
             batch_size=batch_size,
             shuffle=False,
             num_workers=num_workers,
             pin_memory=pin_memory,
+            loader_name=f"Per-device test DataLoader ({device_name})",
         )
         metrics = evaluate(
             model,
@@ -1004,7 +1046,7 @@ def main():
     if args.deterministic:
         generator = torch.Generator()
         generator.manual_seed(args.seed)
-    train_loader = DataLoader(
+    train_loader = make_dataloader(
         train_ds,
         batch_size=args.batch_size,
         shuffle=True,
@@ -1012,8 +1054,9 @@ def main():
         pin_memory=use_pin_memory,
         worker_init_fn=worker_init_fn,
         generator=generator,
+        loader_name="Train DataLoader",
     )
-    val_loader = DataLoader(
+    val_loader = make_dataloader(
         val_ds,
         batch_size=args.batch_size,
         shuffle=False,
@@ -1021,8 +1064,9 @@ def main():
         pin_memory=use_pin_memory,
         worker_init_fn=worker_init_fn,
         generator=generator,
+        loader_name="Validation DataLoader",
     )
-    test_loader = DataLoader(
+    test_loader = make_dataloader(
         test_ds,
         batch_size=args.batch_size,
         shuffle=False,
@@ -1030,6 +1074,7 @@ def main():
         pin_memory=use_pin_memory,
         worker_init_fn=worker_init_fn,
         generator=generator,
+        loader_name="Test DataLoader",
     )
     model = create_model(backbone=args.backbone, pretrained=True, num_classes=1)
     model.to(device)

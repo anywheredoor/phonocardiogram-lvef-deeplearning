@@ -53,10 +53,26 @@ def build_raw_dataset_summary_table(
     sample_rates = set()
     channel_counts = set()
 
+    analyzed_patient_count = 0
+    reduced_patients = 0
+    non_reduced_patients = 0
+
     for row in labeled_df.itertuples(index=False):
-        wav_paths = sorted((heart_sounds_dir / row.patient_id).glob("*.wav"))
+        patient_dir = heart_sounds_dir / row.patient_id
+        if not patient_dir.is_dir():
+            continue
+
+        wav_paths = sorted(patient_dir.glob("*.wav"))
+        if not wav_paths:
+            continue
+
+        analyzed_patient_count += 1
         patient_record_counts.append(len(wav_paths))
         is_reduced = float(row.ef) <= 40.0
+        if is_reduced:
+            reduced_patients += 1
+        else:
+            non_reduced_patients += 1
 
         for wav_path in wav_paths:
             stem = wav_path.stem
@@ -72,10 +88,8 @@ def build_raw_dataset_summary_table(
                 channel_counts.add(int(wav_file.getnchannels()))
                 duration_values.add(round(wav_file.getnframes() / wav_file.getframerate(), 6))
 
-    total_patients = int(len(labeled_df))
+    total_patients = int(analyzed_patient_count)
     total_recordings = int(sum(patient_record_counts))
-    reduced_patients = int((labeled_df["ef"] <= 40.0).sum())
-    non_reduced_patients = total_patients - reduced_patients
     reduced_patient_pct = 100.0 * reduced_patients / total_patients
     non_reduced_patient_pct = 100.0 * non_reduced_patients / total_patients
     reduced_recording_pct = 100.0 * reduced_recordings / total_recordings

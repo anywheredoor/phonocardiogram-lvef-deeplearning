@@ -223,6 +223,7 @@ def main():
     df_meta = build_metadata(df_lvef, args.heart_dir)
 
     out_path = args.output_csv
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     df_meta.to_csv(out_path, index=False)
     print(f"Metadata saved to: {out_path}")
 

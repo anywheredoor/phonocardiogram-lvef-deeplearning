@@ -193,7 +193,7 @@ def generate_outputs(summary_csv: str, output_dir: str, dpi: int, results_run_di
     if not pooled_site_auroc_df.empty:
         _save_csv(
             pooled_site_auroc_df,
-            metadata_dir / 'pooled_model_recording_level_auroc_by_auscultation_site_patient_cluster_bootstrap.csv',
+            metadata_dir / 'pooled_device_model_recording_level_auroc_by_auscultation_site_patient_cluster_bootstrap.csv',
         )
 
     for filename, table_df in tables.items():
