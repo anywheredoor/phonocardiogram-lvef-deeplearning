@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Datasets for PCG-based low LVEF detection.
+Datasets for PCG-based reduced-LVEF detection.
 
 PCGDataset
     - Loads WAVs listed in a split CSV.

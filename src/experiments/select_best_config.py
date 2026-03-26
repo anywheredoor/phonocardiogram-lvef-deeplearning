@@ -4,6 +4,7 @@ Select the best config per device from results/summary.csv.
 
 Rows without a train_device_filter (e.g., pooled runs) are ignored.
 By default, ranks configs by mean test F1_pos, then mean AUPRC, then AUROC.
+For the dissertation workflow, this script is intended to run on CV-only rows.
 """
 
 import argparse
@@ -60,6 +61,14 @@ def parse_args() -> argparse.Namespace:
             "Use 5 for standard 5-fold CV summaries."
         ),
     )
+    parser.add_argument(
+        "--allow_mixed_run_names",
+        action="store_true",
+        help=(
+            "By default, if both CV (`cv_...`) and non-CV run names are detected, "
+            "selection is restricted to the CV rows. Set this flag to disable that safeguard."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -112,6 +121,17 @@ def main() -> None:
         df = df[df["metric_scope"] == args.metric_scope]
 
     df = _filter_eval_only(df, args.include_eval_only)
+
+    if "run_name" in df.columns and not args.allow_mixed_run_names:
+        run_names = df["run_name"].fillna("").astype(str)
+        is_cv = run_names.str.startswith("cv_")
+        if is_cv.any() and (~is_cv).any():
+            print(
+                "Detected both CV and non-CV run names in summary.csv; "
+                "restricting selection to CV rows by default.",
+                file=sys.stderr,
+            )
+            df = df[is_cv]
 
     if "train_device_filter" in df.columns:
         device_col = df["train_device_filter"].fillna("").astype(str).str.strip()

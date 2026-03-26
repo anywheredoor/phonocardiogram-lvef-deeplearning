@@ -50,14 +50,6 @@ def _annot_matrix_from_mean_sd(
 def plot_cv_heatmap_mean_f1(
     cv_agg: pd.DataFrame, cv_best: pd.DataFrame, figures_dir: Path, dpi: int
 ) -> None:
-    heatmap_backbone_order = [
-        "mobilenetv2",
-        "efficientnet_b0",
-        "mobilenetv3_large",
-        "efficientnetv2_s",
-        "swinv2_tiny",
-        "swinv2_small",
-    ]
     sns.set_theme(style="white", context="paper")
     plt.rcParams.update(
         {
@@ -76,7 +68,7 @@ def plot_cv_heatmap_mean_f1(
 
     for ax, device in zip(axes, DEVICE_ORDER):
         sub = cv_agg[cv_agg["train_device_filter"] == device].copy()
-        sub["backbone"] = pd.Categorical(sub["backbone"], heatmap_backbone_order, ordered=True)
+        sub["backbone"] = pd.Categorical(sub["backbone"], BACKBONE_ORDER, ordered=True)
         sub["representation"] = pd.Categorical(
             sub["representation"], REPRESENTATION_ORDER, ordered=True
         )
@@ -84,8 +76,8 @@ def plot_cv_heatmap_mean_f1(
 
         mean_mat = sub.pivot(index="backbone", columns="representation", values="mean_test_f1_pos")
         sd_mat = sub.pivot(index="backbone", columns="representation", values="sd_test_f1_pos")
-        mean_mat = mean_mat.reindex(index=heatmap_backbone_order, columns=REPRESENTATION_ORDER)
-        sd_mat = sd_mat.reindex(index=heatmap_backbone_order, columns=REPRESENTATION_ORDER)
+        mean_mat = mean_mat.reindex(index=BACKBONE_ORDER, columns=REPRESENTATION_ORDER)
+        sd_mat = sd_mat.reindex(index=BACKBONE_ORDER, columns=REPRESENTATION_ORDER)
         annot = _annot_matrix_from_mean_sd(mean_mat, sd_mat, sep=" ")
 
         hm = sns.heatmap(
@@ -729,7 +721,7 @@ def plot_source_model_transfer_roc_curves(
 def plot_pooled_test_roc_comparison_pooled_vs_best_within_models(
     views: Dict[str, pd.DataFrame], results_run_dir: Path, figures_dir: Path, dpi: int
 ) -> None:
-    """Figure 6: pooled-test ROC comparison (pooled model vs three within-device best configs)."""
+    """Figure 6: pooled-test ROC comparison (pooled-device model vs three within-device best configs)."""
     if not results_run_dir.exists():
         return
 

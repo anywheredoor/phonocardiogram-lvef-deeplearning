@@ -47,7 +47,7 @@ High-level study context shared with the registered study:
 - exclusion of participants with implanted active medical devices in the torso
 - recordings collected by research personnel during routine clinic or day-centre visits after consent
 - intended acquisition at the 4 standard cardiac auscultation sites using 3 devices: iPhone, Android phone, and a digital stethoscope
-- up to 12 recordings per participant (`4 sites x 3 devices`), although some participants have fewer or more recordings
+- up to 12 recordings per participant (`4 sites x 3 devices`), although a small number contributed fewer recordings
 - real-world public hospital recording conditions rather than a controlled acoustic environment
 
 The subset used for this project contains WAV heart-sound recordings plus an LVEF CSV. It does not include additional clinical covariates such as age, sex, or BMI.
@@ -109,7 +109,7 @@ The main experiment grid covers:
 
 After configuration selection:
 - one final checkpoint is trained per device using the selected configuration (`3` training runs)
-- each best-config within-device model is evaluated on the other two devices (`6` eval-only runs)
+- `3` cross-device eval-only launches are run from the saved within-device checkpoints, yielding `6` pairwise comparisons
 - one pooled-device model is trained using the selected configuration
 
 This structure supports within-device, cross-device, and pooled-device comparisons under a consistent pipeline.

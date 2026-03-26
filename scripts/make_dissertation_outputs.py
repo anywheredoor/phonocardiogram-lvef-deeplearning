@@ -64,7 +64,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--results_run_dir",
         type=str,
-        default="results/first run",
+        default="results",
         help=(
             "Optional directory containing saved run folders (run_name-matched) "
             "with saved predictions needed for ROC-based dissertation figures."
@@ -85,6 +85,7 @@ def write_readme(
     run_catalog,
     cv_best,
     views,
+    results_run_dir: Path,
 ) -> None:
     lines: List[str] = []
     lines.append("# Dissertation Summary Outputs")
@@ -92,11 +93,14 @@ def write_readme(
     lines.append("These dissertation tables and figures were generated automatically from the project data files.")
     lines.append("Table 1 uses `lvef.csv` and `heart_sounds` to summarize the study cohort before signal preprocessing.")
     lines.append("Table 2 summarizes the shared training settings used across experiments.")
-    lines.append("Table 3 reports pooled-test F1, sensitivity, and specificity for the pooled model and the best-config within-device models.")
+    lines.append("Table 3 reports pooled-test F1, sensitivity, and specificity for the pooled-device model and the best-config within-device models.")
     lines.append("Table 4 summarizes whether AUROC remained above the random AUROC baseline under 95% patient-cluster bootstrap confidence intervals.")
     lines.append("Figure 1 uses backbone parameter counts for the evaluated architectures.")
     lines.append("Figures 2-4 use aggregate metrics from the summary CSV.")
-    lines.append("Figures 5-7 use saved test predictions from `results/first run` (run folders named by `run_name`).")
+    lines.append(
+        "Figures 5-7 use saved test predictions from "
+        f"`{results_run_dir}` (run folders named by `run_name`)."
+    )
     lines.append("")
     lines.append("## Summary CSV structure detected")
     lines.append("")
@@ -233,6 +237,7 @@ def generate_outputs(summary_csv: str, output_dir: str, dpi: int, results_run_di
         run_catalog=run_catalog,
         cv_best=cv_best,
         views=views,
+        results_run_dir=results_run_path,
     )
 
 

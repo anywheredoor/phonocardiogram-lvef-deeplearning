@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unified training entrypoint for PCG-based low LVEF detection.
+Unified training entrypoint for PCG-based reduced-LVEF detection.
 
 Supports:
     - On-the-fly spectrogram computation (PCGDataset).
@@ -38,7 +38,7 @@ from src.utils.metrics import compute_binary_metrics, format_metrics, sigmoid_pr
 # --------------------------------------------------------------------------- #
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Train PCG-based low LVEF detector."
+        description="Train PCG-based reduced-LVEF detector."
     )
     parser.add_argument(
         "--train_csv",

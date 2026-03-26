@@ -91,7 +91,7 @@ def load_lvef_table(lvef_csv: str) -> pd.DataFrame:
         )
         sys.exit(1)
 
-    # Drop missing EF values, as agreed
+    # Exclude rows without EF values.
     before = len(df)
     df = df.dropna(subset=["ef"]).copy()
     after = len(df)
