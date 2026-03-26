@@ -96,7 +96,7 @@ At a high level, each recording is:
 - loaded from WAV
 - resampled to the target sampling rate (default: 2 kHz)
 - band-pass filtered (`20-800 Hz`)
-- center-cropped to a fixed duration (default: 4 s; zero-padding is supported when needed)
+- centre-cropped to a fixed duration (default: 4 s; zero-padding is supported when needed)
 - converted to either MFCC or gammatone representation
 - resized to the requested image size for ImageNet-pretrained backbones
 
@@ -109,7 +109,7 @@ The main experiment grid covers:
 
 After configuration selection:
 - one final checkpoint is trained per device using the selected configuration (`3` training runs)
-- each best-config device model is evaluated on the other two devices (`6` eval-only runs)
+- each best-config within-device model is evaluated on the other two devices (`6` eval-only runs)
 - one pooled-device model is trained using the selected configuration
 
 This structure supports within-device, cross-device, and pooled-device comparisons under a consistent pipeline.
@@ -146,7 +146,7 @@ flowchart LR
 ### Pooled-device workflow
 ```mermaid
 flowchart LR
-    A["Best-config pooled-device model trained on all devices"] --> E["Evaluate on pooled test set"]
+    A["Pooled-device model trained on all devices"] --> E["Evaluate on pooled test set"]
     B["Best-config within-device model trained on iPhone"] --> E
     C["Best-config within-device model trained on Android phone"] --> E
     D["Best-config within-device model trained on Digital stethoscope"] --> E
