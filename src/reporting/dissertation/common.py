@@ -894,7 +894,7 @@ def compute_test_discrimination_vs_random_baseline(
             rows.append(
                 {
                     "evaluation_group": "pool_overall",
-                    "evaluation_label": "Pooled model trained on all devices (pooled test set)",
+                    "evaluation_label": "Pooled-device model trained on all devices (pooled test set)",
                     "run_name": run_name,
                     "source_run_name": "",
                     "source_device": "pooled_all_devices",

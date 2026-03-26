@@ -188,7 +188,7 @@ def build_pooled_test_performance_table(
         )
         rows.append(
             {
-                "Model": "Pooled model trained on all devices",
+                "Model": "Pooled-device model trained on all devices",
                 "Tuned threshold": f"{pool_threshold:.2f}",
                 "F1, % (95% CI)": _format_pct_ci(
                     pool_metrics["f1_pos"],

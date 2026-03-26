@@ -771,7 +771,7 @@ def plot_pooled_test_roc_comparison_pooled_vs_best_within_models(
         curves.append(
             {
                 "key": "pooled",
-                "label_base": "Pooled model trained on all devices",
+                "label_base": "Pooled-device model trained on all devices",
                 "y_true": y_true,
                 "y_prob": y_prob,
                 "color": model_colors["pooled"],
