@@ -393,11 +393,13 @@ def main() -> None:
         if err:
             report["pos_weight_train_error"] = err
 
+    os.makedirs(os.path.dirname(args.output_json) or ".", exist_ok=True)
     with open(args.output_json, "w") as f:
         json.dump(report, f, indent=2)
     print(f"Wrote QA report to {args.output_json}")
 
     if args.output_csv:
+        os.makedirs(os.path.dirname(args.output_csv) or ".", exist_ok=True)
         pd.DataFrame(per_record_rows).to_csv(args.output_csv, index=False)
         print(f"Wrote per-record audio stats to {args.output_csv}")
 

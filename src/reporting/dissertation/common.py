@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
@@ -12,9 +13,10 @@ _MODULE_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
-_MPL_CACHE = _REPO_ROOT / "reports" / ".matplotlib_cache"
-_MPL_CACHE.mkdir(parents=True, exist_ok=True)
-os.environ.setdefault("MPLCONFIGDIR", str(_MPL_CACHE))
+if "MPLCONFIGDIR" not in os.environ:
+    _MPL_CACHE = Path(tempfile.gettempdir()) / "pcg_matplotlib_cache"
+    _MPL_CACHE.mkdir(parents=True, exist_ok=True)
+    os.environ["MPLCONFIGDIR"] = str(_MPL_CACHE)
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -370,23 +372,6 @@ def _load_history_file(results_run_dir: Path, run_name: str) -> pd.DataFrame | N
     if missing:
         raise ValueError(f"{path} is missing required columns: {missing}")
     return df
-
-def _expected_calibration_error(y_true: np.ndarray, y_prob: np.ndarray, n_bins: int = 10) -> float:
-    bins = np.linspace(0.0, 1.0, n_bins + 1)
-    bin_ids = np.digitize(y_prob, bins, right=True) - 1
-    bin_ids = np.clip(bin_ids, 0, n_bins - 1)
-    n = len(y_true)
-    if n == 0:
-        return float("nan")
-    ece = 0.0
-    for b in range(n_bins):
-        mask = bin_ids == b
-        if not np.any(mask):
-            continue
-        p_bin = float(np.mean(y_prob[mask]))
-        y_bin = float(np.mean(y_true[mask]))
-        ece += abs(y_bin - p_bin) * (np.sum(mask) / n)
-    return float(ece)
 
 def _curve_inputs_from_predictions(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray] | None:
     if df is None or df.empty:

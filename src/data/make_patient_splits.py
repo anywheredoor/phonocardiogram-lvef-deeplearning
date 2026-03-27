@@ -244,7 +244,7 @@ def main():
     # Sanity check: no missing splits
     assert df_meta_splits["split"].isna().sum() == 0
 
-    # Save full metadata with split column (handy for debugging)
+    # Save full metadata with the split column for debugging/reference.
     full_meta_path = os.path.join(args.output_dir, "metadata_with_splits.csv")
     df_meta_splits.to_csv(full_meta_path, index=False)
     print(f"Wrote metadata with split column to: {full_meta_path}")

@@ -52,8 +52,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--summary_csv",
         type=str,
-        default="summary.csv",
-        help="Path to summary CSV (default: ./summary.csv).",
+        default="results/summary.csv",
+        help="Path to summary CSV (default: results/summary.csv; falls back to ./summary.csv if needed).",
     )
     parser.add_argument(
         "--output_dir",
@@ -77,6 +77,24 @@ def parse_args() -> argparse.Namespace:
         help="Figure DPI for PNG outputs (default: 300).",
     )
     return parser.parse_args()
+
+
+def _resolve_summary_csv_path(path: str) -> str:
+    candidate = Path(path)
+    if candidate.is_file():
+        return str(candidate)
+
+    fallback = None
+    if path == "results/summary.csv":
+        fallback = Path("summary.csv")
+    elif path == "summary.csv":
+        fallback = Path("results/summary.csv")
+
+    if fallback is not None and fallback.is_file():
+        print(f"Warning: {path} not found; using {fallback}")
+        return str(fallback)
+
+    raise FileNotFoundError(f"summary CSV not found: {path}")
 
 
 def write_readme(
@@ -152,6 +170,7 @@ def generate_outputs(summary_csv: str, output_dir: str, dpi: int, results_run_di
     figures_dir.mkdir(parents=True, exist_ok=True)
     metadata_dir.mkdir(parents=True, exist_ok=True)
 
+    summary_csv = _resolve_summary_csv_path(summary_csv)
     df = load_and_normalize_summary(summary_csv)
     run_catalog = classify_runs(df)
     views = extract_clean_views(df, run_catalog)

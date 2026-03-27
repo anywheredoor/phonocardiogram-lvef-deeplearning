@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
+import re
 from typing import Dict, List
 import wave
 
@@ -33,6 +34,50 @@ _RAW_SITE_LABELS = {
     "P": "Pulmonic",
     "T": "Tricuspid",
 }
+
+_RAW_FILENAME_RE = re.compile(
+    r"^(?P<device_code>[A-Za-z])Data(?P<patient_id>\d+)(?P<position>[A-Za-z])$"
+)
+
+
+def _pct_text(count: int, total: int) -> str:
+    if total <= 0:
+        return "NA"
+    return f"{100.0 * count / total:.1f}%"
+
+
+def _recordings_per_patient_text(
+    patient_record_counts: List[int], patients_with_12: int, total_patients: int
+) -> str:
+    if not patient_record_counts:
+        return "NA; no analyzable patient recordings were found"
+    return (
+        f"{min(patient_record_counts)}-{max(patient_record_counts)}; "
+        f"{patients_with_12:,} of {total_patients:,} patients have 12 recordings"
+    )
+
+
+def _duration_text(duration_values: set[float]) -> str:
+    if not duration_values:
+        return "NA"
+    if len(duration_values) == 1:
+        return f"{next(iter(duration_values)):g} s for all recordings"
+    return (
+        f"{min(duration_values):g}-{max(duration_values):g} s across recordings"
+    )
+
+
+def _parse_raw_filename(stem: str) -> tuple[str, str] | None:
+    match = _RAW_FILENAME_RE.match(stem)
+    if not match:
+        return None
+
+    device_code = match.group("device_code").lower()
+    site_code = match.group("position").upper()
+    if device_code not in _RAW_DEVICE_LABELS or site_code not in _RAW_SITE_LABELS:
+        return None
+
+    return device_code, site_code
 
 
 def build_raw_dataset_summary_table(
@@ -66,18 +111,26 @@ def build_raw_dataset_summary_table(
         if not wav_paths:
             continue
 
+        valid_wav_paths = []
+        for wav_path in wav_paths:
+            parsed = _parse_raw_filename(wav_path.stem)
+            if parsed is None:
+                continue
+            valid_wav_paths.append((wav_path, parsed))
+        if not valid_wav_paths:
+            continue
+
         analyzed_patient_count += 1
-        patient_record_counts.append(len(wav_paths))
+        patient_record_counts.append(len(valid_wav_paths))
         is_reduced = float(row.ef) <= 40.0
         if is_reduced:
             reduced_patients += 1
         else:
             non_reduced_patients += 1
 
-        for wav_path in wav_paths:
-            stem = wav_path.stem
-            device_counts[stem[0]] += 1
-            site_counts[stem[-1]] += 1
+        for wav_path, (device_code, site_code) in valid_wav_paths:
+            device_counts[device_code] += 1
+            site_counts[site_code] += 1
             if is_reduced:
                 reduced_recordings += 1
             else:
@@ -90,34 +143,45 @@ def build_raw_dataset_summary_table(
 
     total_patients = int(analyzed_patient_count)
     total_recordings = int(sum(patient_record_counts))
-    reduced_patient_pct = 100.0 * reduced_patients / total_patients
-    non_reduced_patient_pct = 100.0 * non_reduced_patients / total_patients
-    reduced_recording_pct = 100.0 * reduced_recordings / total_recordings
-    non_reduced_recording_pct = 100.0 * non_reduced_recordings / total_recordings
     patients_with_12 = int(sum(count == 12 for count in patient_record_counts))
-    duration_seconds = min(duration_values) if duration_values else float("nan")
+    recordings_per_patient_text = _recordings_per_patient_text(
+        patient_record_counts, patients_with_12, total_patients
+    )
+    duration_text = _duration_text(duration_values)
 
     if len(sample_rates) == 1:
         sample_rate_text = f"{next(iter(sample_rates)) / 1000:g} kHz"
+    elif sample_rates:
+        sample_rate_text = ", ".join(
+            f"{sr / 1000:g} kHz" for sr in sorted(sample_rates)
+        )
     else:
-        sample_rate_text = ", ".join(f"{sr / 1000:g} kHz" for sr in sorted(sample_rates))
+        sample_rate_text = "NA"
     if channel_counts == {1}:
         channel_text = "mono"
-    else:
+    elif channel_counts:
         channel_text = ", ".join(str(ch) for ch in sorted(channel_counts))
+    else:
+        channel_text = "NA"
+
+    audio_format_text = (
+        f"WAV, {channel_text}, {sample_rate_text} sampling rate"
+        if sample_rates or channel_counts
+        else "WAV (no readable recordings)"
+    )
 
     rows = [
         ("Total patients", f"{total_patients:,}"),
         ("Total recordings", f"{total_recordings:,}"),
         (
             "Patients by class",
-            f"{reduced_patients:,} reduced LVEF ({reduced_patient_pct:.1f}%); "
-            f"{non_reduced_patients:,} non-reduced LVEF ({non_reduced_patient_pct:.1f}%)",
+            f"{reduced_patients:,} reduced LVEF ({_pct_text(reduced_patients, total_patients)}); "
+            f"{non_reduced_patients:,} non-reduced LVEF ({_pct_text(non_reduced_patients, total_patients)})",
         ),
         (
             "Recordings by class",
-            f"{reduced_recordings:,} reduced LVEF ({reduced_recording_pct:.1f}%); "
-            f"{non_reduced_recordings:,} non-reduced LVEF ({non_reduced_recording_pct:.1f}%)",
+            f"{reduced_recordings:,} reduced LVEF ({_pct_text(reduced_recordings, total_recordings)}); "
+            f"{non_reduced_recordings:,} non-reduced LVEF ({_pct_text(non_reduced_recordings, total_recordings)})",
         ),
         (
             "Recordings by device",
@@ -135,11 +199,10 @@ def build_raw_dataset_summary_table(
         ),
         (
             "Recordings per patient",
-            f"{min(patient_record_counts)}-{max(patient_record_counts)}; "
-            f"{patients_with_12:,} of {total_patients:,} patients have 12 recordings",
+            recordings_per_patient_text,
         ),
-        ("Duration per recording", f"{duration_seconds:g} s for all recordings"),
-        ("Audio format", f"WAV, {channel_text}, {sample_rate_text} sampling rate"),
+        ("Duration per recording", duration_text),
+        ("Audio format", audio_format_text),
     ]
     return pd.DataFrame(rows, columns=["Attribute", "Details"])
 

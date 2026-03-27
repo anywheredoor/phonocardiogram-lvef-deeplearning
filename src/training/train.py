@@ -79,6 +79,16 @@ def parse_args() -> argparse.Namespace:
         help="Backbone architecture (timm name is resolved internally).",
     )
     parser.add_argument(
+        "--pretrained",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Load ImageNet-pretrained backbone weights. "
+            "Automatically disabled in --eval_only because checkpoint "
+            "weights are restored immediately afterward."
+        ),
+    )
+    parser.add_argument(
         "--batch_size",
         type=int,
         default=32,
@@ -432,6 +442,7 @@ def apply_checkpoint_args(args: argparse.Namespace, ckpt_args: dict) -> None:
     override_fields = [
         "representation",
         "backbone",
+        "pretrained",
         "image_size",
         "sample_rate",
         "fixed_duration",
@@ -917,6 +928,7 @@ def save_run_outputs(
         "timestamp": payload["timestamp"],
         "representation": args.representation,
         "backbone": args.backbone,
+        "pretrained": args.pretrained,
         "eval_only": args.eval_only,
         "device_filter": ",".join(args.device_filter) if args.device_filter else "",
         "train_device_filter": ",".join(args.train_device_filter) if args.train_device_filter else "",
@@ -971,7 +983,10 @@ def save_run_outputs(
 
     summary_df = pd.DataFrame(summary_rows)
     if os.path.exists(summary_path):
-        summary_df = pd.concat([pd.read_csv(summary_path), summary_df], ignore_index=True)
+        existing = pd.read_csv(summary_path)
+        if "run_name" in existing.columns:
+            existing = existing[existing["run_name"].astype(str) != str(run_name)]
+        summary_df = pd.concat([existing, summary_df], ignore_index=True)
     summary_df.to_csv(summary_path, index=False)
 
 
@@ -1076,7 +1091,17 @@ def main():
         generator=generator,
         loader_name="Test DataLoader",
     )
-    model = create_model(backbone=args.backbone, pretrained=True, num_classes=1)
+    model_pretrained = bool(args.pretrained and not args.eval_only)
+    if args.eval_only and args.pretrained:
+        print(
+            "Eval-only: skipping ImageNet weight loading because checkpoint "
+            "weights will be restored."
+        )
+    model = create_model(
+        backbone=args.backbone,
+        pretrained=model_pretrained,
+        num_classes=1,
+    )
     model.to(device)
 
     if args.eval_only:

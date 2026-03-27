@@ -7,3 +7,7 @@ scikit-learn>=1.1
 soundfile>=0.12
 tqdm>=4.64
 gammatone>=1.0
+matplotlib>=3.8
+seaborn>=0.13
+matplotlib>=3.9
+seaborn>=0.13

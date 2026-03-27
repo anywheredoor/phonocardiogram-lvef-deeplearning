@@ -74,9 +74,8 @@ class PCGDataset(Dataset):
         """
         super().__init__()
 
-        assert representation in ("mfcc", "gammatone"), (
-            "representation must be 'mfcc' or 'gammatone'"
-        )
+        if representation not in ("mfcc", "gammatone"):
+            raise ValueError("representation must be 'mfcc' or 'gammatone'")
 
         self.csv_path = csv_path
         self.representation = representation

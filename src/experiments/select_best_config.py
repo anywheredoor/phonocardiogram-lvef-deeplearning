@@ -3,8 +3,8 @@
 Select the best config per device from results/summary.csv.
 
 Rows without a train_device_filter (e.g., pooled runs) are ignored.
-By default, ranks configs by mean test F1_pos, then mean AUPRC, then AUROC.
-For the dissertation workflow, this script is intended to run on CV-only rows.
+For this workflow, mean test F1_pos is the main selection metric.
+This script is intended to run on CV-only rows.
 """
 
 import argparse

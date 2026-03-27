@@ -14,6 +14,7 @@ Run from repo root, e.g.:
 
 import argparse
 import json
+import os
 from typing import Tuple
 
 import torch
@@ -148,7 +149,7 @@ def compute_mean_std_for_rep(
         sample_rate=sample_rate,
         fixed_duration=fixed_duration,
         image_size=image_size,
-        mean=None,  # very important: no normalisation here
+        mean=None,  # do not normalise while computing the stats
         std=None,
         device_filter=device_filter,
         position_filter=position_filter,
@@ -198,6 +199,7 @@ def main():
         print("No stats computed. Nothing to save.")
         return
 
+    os.makedirs(os.path.dirname(args.output_json) or ".", exist_ok=True)
     with open(args.output_json, "w") as f:
         json.dump(stats, f, indent=2)
 

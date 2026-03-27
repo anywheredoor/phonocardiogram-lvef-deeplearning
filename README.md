@@ -87,7 +87,7 @@ pip install -r requirements-lock.txt
 
 If you need GPU support, install a compatible PyTorch build first, then install the remaining packages.
 
-Using `colab_pipeline.ipynb` on Google Colab is highly recommended for a guided end-to-end run, especially if local GPU resources are limited.
+`colab_pipeline.ipynb` is a convenient way to run the full workflow on Google Colab, especially if local GPU resources are limited.
 
 ## Data Preprocessing
 The training pipeline performs feature generation on the fly.
@@ -206,12 +206,18 @@ python -m src.experiments.select_best_config \
 
 Train a final model:
 ```bash
+python -m src.data.compute_stats \
+  --train_csv splits/metadata_train.csv \
+  --representations mfcc \
+  --output_json tf_stats.json
+
 python -m src.training.train \
   --train_csv splits/metadata_train.csv \
   --val_csv splits/metadata_val.csv \
   --test_csv splits/metadata_test.csv \
   --representation mfcc \
   --backbone mobilenetv2 \
+  --tf_stats_json tf_stats.json \
   --auto_pos_weight \
   --tune_threshold \
   --amp \
