@@ -153,29 +153,25 @@ flowchart LR
 ```
 
 ## Command-Line Usage
-Typical flow:
-- build `metadata.csv`
-- make one held-out split in `splits/` and one CV split in `splits/cv/`
-- select device-specific configs with within-device CV
-- train held-out within-device models, then run cross-device and pooled-device evaluation
+Use this order:
+1. build `metadata.csv`
+2. make a held-out split in `splits/` for within-device, cross-device, and pooled-device evaluation
+3. make a separate 5-fold CV split in `splits/cv/` for within-device model selection
+4. run within-device CV, then select one best config per device
+5. train held-out within-device models
+6. reuse those checkpoints in `--eval_only` mode for cross-device transfer and pooled-test comparison
+7. train one pooled-device model on the held-out pooled split; no separate pooled CV is used
 
-Build metadata:
 ```bash
 python -m src.data.build_metadata \
   --lvef_csv lvef.csv \
   --heart_dir heart_sounds \
   --output_csv metadata.csv
-```
 
-Create held-out train/validation/test split:
-```bash
 python -m src.data.make_patient_splits \
   --metadata_csv metadata.csv \
   --output_dir splits
-```
 
-Create patient-level CV folds:
-```bash
 python -m src.data.make_patient_cv_splits \
   --metadata_csv metadata.csv \
   --output_dir splits/cv \
@@ -183,19 +179,19 @@ python -m src.data.make_patient_cv_splits \
   --n_repeats 1
 ```
 
-Run within-device CV for one candidate configuration (example: iPhone):
+Within-device CV for one candidate configuration:
 ```bash
 python -m src.experiments.run_cv \
   --cv_index splits/cv/index.csv \
   --results_dir results \
   --output_dir checkpoints \
   -- \
-  --representation gammatone \
-  --backbone swinv2_tiny \
-  --image_size 256 \
-  --train_device_filter iphone \
-  --val_device_filter iphone \
-  --test_device_filter iphone \
+  --representation <representation> \
+  --backbone <backbone> \
+  --image_size <image_size> \
+  --train_device_filter <source_device> \
+  --val_device_filter <source_device> \
+  --test_device_filter <source_device> \
   --auto_pos_weight \
   --tune_threshold
 ```
@@ -209,36 +205,32 @@ python -m src.experiments.select_best_config \
   --all_csv results/selection/config_summary_by_device.csv
 ```
 
-The examples below use `gammatone + swinv2_tiny` with `image_size 256`.
-
-Train a held-out within-device model (example: iPhone):
+Train a held-out within-device model:
 ```bash
 python -m src.data.compute_stats \
   --train_csv splits/metadata_train.csv \
-  --representations gammatone \
-  --image_size 256 \
-  --device_filter iphone \
-  --output_json tf_stats_iphone.json
+  --representations <representation> \
+  --image_size <image_size> \
+  --device_filter <source_device> \
+  --output_json tf_stats_<source_device>.json
 
 python -m src.training.train \
   --train_csv splits/metadata_train.csv \
   --val_csv splits/metadata_val.csv \
   --test_csv splits/metadata_test.csv \
-  --representation gammatone \
-  --backbone swinv2_tiny \
-  --image_size 256 \
-  --tf_stats_json tf_stats_iphone.json \
-  --train_device_filter iphone \
-  --val_device_filter iphone \
-  --test_device_filter iphone \
+  --representation <representation> \
+  --backbone <backbone> \
+  --image_size <image_size> \
+  --tf_stats_json tf_stats_<source_device>.json \
+  --train_device_filter <source_device> \
+  --val_device_filter <source_device> \
+  --test_device_filter <source_device> \
   --auto_pos_weight \
   --tune_threshold \
-  --amp \
-  --save_predictions \
   --results_dir results
 ```
 
-Run cross-device eval-only transfer (example: iPhone -> Android phone):
+Reuse the within-device checkpoint in eval-only mode. Add `--test_device_filter <target_device>` for cross-device transfer; omit it for pooled-test comparison.
 ```bash
 python -m src.training.train \
   --eval_only \
@@ -246,48 +238,29 @@ python -m src.training.train \
   --train_csv splits/metadata_train.csv \
   --val_csv splits/metadata_val.csv \
   --test_csv splits/metadata_test.csv \
-  --train_device_filter iphone \
-  --val_device_filter iphone \
-  --test_device_filter android_phone \
-  --save_predictions \
+  --train_device_filter <source_device> \
+  --val_device_filter <source_device> \
   --results_dir results
 ```
 
-Evaluate a within-device checkpoint on the pooled test set:
-```bash
-python -m src.training.train \
-  --eval_only \
-  --checkpoint_path checkpoints/<run_name>/best.pth \
-  --train_csv splits/metadata_train.csv \
-  --val_csv splits/metadata_val.csv \
-  --test_csv splits/metadata_test.csv \
-  --train_device_filter iphone \
-  --val_device_filter iphone \
-  --save_predictions \
-  --per_device_eval \
-  --results_dir results
-```
-
-Train the pooled-device model on the held-out pooled split (leave device filters unset):
+Train the pooled-device model after within-device model selection. Leave device filters unset so all devices remain in the held-out split.
 ```bash
 python -m src.data.compute_stats \
   --train_csv splits/metadata_train.csv \
-  --representations gammatone \
-  --image_size 256 \
+  --representations <representation> \
+  --image_size <image_size> \
   --output_json tf_stats_pooled.json
 
 python -m src.training.train \
   --train_csv splits/metadata_train.csv \
   --val_csv splits/metadata_val.csv \
   --test_csv splits/metadata_test.csv \
-  --representation gammatone \
-  --backbone swinv2_tiny \
-  --image_size 256 \
+  --representation <representation> \
+  --backbone <backbone> \
+  --image_size <image_size> \
   --tf_stats_json tf_stats_pooled.json \
   --auto_pos_weight \
   --tune_threshold \
-  --amp \
-  --save_predictions \
   --results_dir results
 ```
 
