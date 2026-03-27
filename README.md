@@ -153,10 +153,11 @@ flowchart LR
 ```
 
 ## Command-Line Usage
-The commands below map onto the study workflow as follows:
-- within-device experiments use patient-level cross-validation via `src.experiments.run_cv`, followed by final training with `src.training.train`
-- cross-device experiments reuse a selected within-device checkpoint and run eval-only testing on a different device
-- pooled-device experiments train and evaluate with the same training entrypoint on pooled splits
+Typical flow:
+- build `metadata.csv`
+- make one held-out split in `splits/` and one CV split in `splits/cv/`
+- select device-specific configs with within-device CV
+- train held-out within-device models, then run cross-device and pooled-device evaluation
 
 Build metadata:
 ```bash
@@ -166,7 +167,7 @@ python -m src.data.build_metadata \
   --output_csv metadata.csv
 ```
 
-Create final train/validation/test splits:
+Create held-out train/validation/test split:
 ```bash
 python -m src.data.make_patient_splits \
   --metadata_csv metadata.csv \
@@ -182,20 +183,24 @@ python -m src.data.make_patient_cv_splits \
   --n_repeats 1
 ```
 
-Run cross-validation for a candidate configuration:
+Run within-device CV for one candidate configuration (example: iPhone):
 ```bash
 python -m src.experiments.run_cv \
   --cv_index splits/cv/index.csv \
   --results_dir results \
   --output_dir checkpoints \
   -- \
-  --representation mfcc \
-  --backbone mobilenetv2 \
+  --representation gammatone \
+  --backbone swinv2_tiny \
+  --image_size 256 \
+  --train_device_filter iphone \
+  --val_device_filter iphone \
+  --test_device_filter iphone \
   --auto_pos_weight \
   --tune_threshold
 ```
 
-Select the best configuration per device from a CV-only summary file:
+Select the best configuration per device:
 ```bash
 python -m src.experiments.select_best_config \
   --summary_csv results/summary.csv \
@@ -204,20 +209,28 @@ python -m src.experiments.select_best_config \
   --all_csv results/selection/config_summary_by_device.csv
 ```
 
-Train a final model:
+The examples below use `gammatone + swinv2_tiny` with `image_size 256`.
+
+Train a held-out within-device model (example: iPhone):
 ```bash
 python -m src.data.compute_stats \
   --train_csv splits/metadata_train.csv \
-  --representations mfcc \
-  --output_json tf_stats.json
+  --representations gammatone \
+  --image_size 256 \
+  --device_filter iphone \
+  --output_json tf_stats_iphone.json
 
 python -m src.training.train \
   --train_csv splits/metadata_train.csv \
   --val_csv splits/metadata_val.csv \
   --test_csv splits/metadata_test.csv \
-  --representation mfcc \
-  --backbone mobilenetv2 \
-  --tf_stats_json tf_stats.json \
+  --representation gammatone \
+  --backbone swinv2_tiny \
+  --image_size 256 \
+  --tf_stats_json tf_stats_iphone.json \
+  --train_device_filter iphone \
+  --val_device_filter iphone \
+  --test_device_filter iphone \
   --auto_pos_weight \
   --tune_threshold \
   --amp \
@@ -225,7 +238,7 @@ python -m src.training.train \
   --results_dir results
 ```
 
-Evaluate a saved checkpoint without retraining:
+Run cross-device eval-only transfer (example: iPhone -> Android phone):
 ```bash
 python -m src.training.train \
   --eval_only \
@@ -233,7 +246,47 @@ python -m src.training.train \
   --train_csv splits/metadata_train.csv \
   --val_csv splits/metadata_val.csv \
   --test_csv splits/metadata_test.csv \
+  --train_device_filter iphone \
+  --val_device_filter iphone \
+  --test_device_filter android_phone \
+  --save_predictions \
+  --results_dir results
+```
+
+Evaluate a within-device checkpoint on the pooled test set:
+```bash
+python -m src.training.train \
+  --eval_only \
+  --checkpoint_path checkpoints/<run_name>/best.pth \
+  --train_csv splits/metadata_train.csv \
+  --val_csv splits/metadata_val.csv \
+  --test_csv splits/metadata_test.csv \
+  --train_device_filter iphone \
+  --val_device_filter iphone \
+  --save_predictions \
   --per_device_eval \
+  --results_dir results
+```
+
+Train the pooled-device model on the held-out pooled split (leave device filters unset):
+```bash
+python -m src.data.compute_stats \
+  --train_csv splits/metadata_train.csv \
+  --representations gammatone \
+  --image_size 256 \
+  --output_json tf_stats_pooled.json
+
+python -m src.training.train \
+  --train_csv splits/metadata_train.csv \
+  --val_csv splits/metadata_val.csv \
+  --test_csv splits/metadata_test.csv \
+  --representation gammatone \
+  --backbone swinv2_tiny \
+  --image_size 256 \
+  --tf_stats_json tf_stats_pooled.json \
+  --auto_pos_weight \
+  --tune_threshold \
+  --amp \
   --save_predictions \
   --results_dir results
 ```
