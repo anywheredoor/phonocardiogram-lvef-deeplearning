@@ -7,7 +7,7 @@ The project studies reduced left ventricular ejection fraction (LVEF) detection 
 - cross-device transfer
 - pooled-device training and evaluation
 - MFCC versus gammatone representations
-- lightweight CNN backbones versus Swin Transformer backbones
+- lightweight CNN backbones versus hierarchical vision transformer backbones
 
 The task is binary classification: reduced LVEF (`EF <= 40%`) versus non-reduced LVEF (`EF > 40%`).
 
@@ -45,12 +45,12 @@ High-level study context shared with the registered study:
 - observational study approved by the Institutional Review Board of the University of Hong Kong / Hospital Authority Hong Kong West Cluster
 - adult cardiology outpatients aged 22 years or above who had undergone echocardiography within 3 years
 - exclusion of participants with implanted active medical devices in the torso
-- recordings collected by research personnel during routine clinic or day-centre visits after consent
+- recordings collected by research personnel during routine clinical appointments after consent
 - intended acquisition at the 4 standard cardiac auscultation sites using 3 devices: iPhone, Android phone, and a digital stethoscope
 - up to 12 recordings per participant (`4 sites x 3 devices`), although a small number contributed fewer recordings
 - real-world public hospital recording conditions rather than a controlled acoustic environment
 
-The subset used for this project contains WAV heart-sound recordings plus an LVEF CSV. It does not include additional clinical covariates such as age, sex, or BMI.
+The subset used for this project contains WAV heart-sound recordings plus an LVEF CSV. It does not include additional demographic or clinical covariates.
 
 The raw heart-sound recordings and LVEF labels are not distributed in this repository. They originate from human-participant data and remain restricted for participant privacy, ethics approval, and local data-governance reasons.
 
@@ -96,7 +96,7 @@ At a high level, each recording is:
 - loaded from WAV
 - resampled to the target sampling rate (default: 2 kHz)
 - band-pass filtered (`20-800 Hz`)
-- centre-cropped to a fixed duration (default: 4 s; zero-padding is supported when needed)
+- centre-cropped to a fixed duration (default: 4 s)
 - converted to either MFCC or gammatone representation
 - resized to the requested image size for ImageNet-pretrained backbones
 
@@ -109,7 +109,8 @@ The main experiment grid covers:
 
 After configuration selection:
 - one final checkpoint is trained per device using the selected configuration (`3` training runs)
-- `3` cross-device eval-only launches are run from the saved within-device checkpoints, yielding `6` pairwise comparisons
+- `6` cross-device eval-only runs are launched from the saved within-device checkpoints, yielding `6` pairwise comparisons
+- `3` additional eval-only runs compare the within-device checkpoints on the pooled test set
 - one pooled-device model is trained using the selected configuration
 
 This structure supports within-device, cross-device, and pooled-device comparisons under a consistent pipeline.
