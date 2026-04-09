@@ -3,11 +3,11 @@ message: "If you use this repository, please cite it using this metadata."
 title: "Deep Learning Analysis of Smartphone and Digital Stethoscope Phonocardiograms for Detection of Reduced Left Ventricular Ejection Fraction"
 type: software
 authors:
-  - family-names: YANG
-    given-names: WONJUN
+  - family-names: Yang
+    given-names: Wonjun
 license: Apache-2.0
 version: 1.0.0
-date-released: 2026-02-16
+date-released: 2026-04-09
 keywords:
   - reduced left ventricular ejection fraction
   - phonocardiogram
