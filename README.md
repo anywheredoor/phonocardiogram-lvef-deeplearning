@@ -38,6 +38,8 @@ I am grateful to **[Prof. Chun-Ka Wong](https://medic.hku.hk/en/Staff/University
 - [Citation](#citation)
 - [License](#license)
 
+---
+
 ## Data Source and Study Context
 The heart sound and LVEF data used in this project come from a de-identified stratified random sample derived from [ClinicalTrials.gov NCT06070298](https://clinicaltrials.gov/study/NCT06070298). The registered study concerns smartphone-based phonocardiography for murmur detection, whereas this repository focuses on reduced-LVEF screening using the same heart-sound acquisition protocol.
 
