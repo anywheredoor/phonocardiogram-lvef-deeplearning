@@ -2,9 +2,9 @@
 """
 Create patient-level stratified train/val/test splits from metadata.csv.
 
-- Splits are done at PATIENT level (no leakage).
-- Stratified on the binary label (EF <= 40 -> 1, else 0).
-- Default split: ~65% train, 15% val, 20% test (by patients).
+- Splits are created at the patient level to avoid leakage.
+- Stratification uses the binary label (EF <= 40 -> 1, else 0).
+- Default split: ~65% train, 15% val, 20% test by patient.
 
 Outputs:
     - splits/patient_splits.csv        (one row per patient with split assignment)
@@ -104,7 +104,7 @@ def make_patient_table(df_meta: pd.DataFrame) -> pd.DataFrame:
         .reset_index()
     )
 
-    # Sanity check: no conflicting labels per patient
+    # Each patient should map to a single binary label.
     label_counts = df_meta.groupby("patient_id")["label"].nunique()
     bad = label_counts[label_counts > 1]
     if len(bad) > 0:
@@ -165,13 +165,13 @@ def stratified_patient_split(
             "Require: test_size > 0, val_size >= 0, and test_size + val_size < 1.0"
         )
 
-    # First: train_val vs test
+    # First split: train_val vs test.
     df_train_val, df_test = _safe_train_test_split(
         df_pat, test_size=test_size, seed=seed, stage="train/test"
     )
 
-    # Now split train_val into train vs val.
-    # val proportion relative to the remaining (train+val) set:
+    # Second split: train_val into train vs val.
+    # Compute the validation proportion relative to the remaining train+val set.
     rel_val_size = val_size / (1.0 - test_size)
 
     if rel_val_size > 0:
@@ -183,7 +183,7 @@ def stratified_patient_split(
         )
     else:
         df_train = df_train_val
-        df_val = df_train_val.iloc[0:0].copy()  # empty
+        df_val = df_train_val.iloc[0:0].copy()
 
     return df_train, df_val, df_test
 
@@ -208,7 +208,7 @@ def main():
         f"Test patients: {len(df_test)}"
     )
 
-    # Add a 'split' column and combine
+    # Add the split column and combine the patient tables.
     df_train = df_train.copy()
     df_val = df_val.copy()
     df_test = df_test.copy()
@@ -221,19 +221,19 @@ def main():
         drop=True
     )
 
-    # Sanity check: no overlap in patient_ids
+    # Confirm that each patient appears in exactly one split.
     assert df_pat_splits["patient_id"].nunique() == len(df_pat), \
         "Some patients appear in multiple splits!"
 
-    # Prepare output directory
+    # Prepare the output directory.
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # 1) Save patient-level splits
+    # Save the patient-level split table.
     pat_split_path = os.path.join(args.output_dir, "patient_splits.csv")
     df_pat_splits.to_csv(pat_split_path, index=False)
     print(f"Wrote patient splits to: {pat_split_path}")
 
-    # 2) Merge back to metadata to make per-example splits
+    # Merge the split assignments back into the recording-level metadata.
     df_meta_splits = df_meta.merge(
         df_pat_splits[["patient_id", "split"]],
         on="patient_id",
@@ -241,15 +241,15 @@ def main():
         validate="many_to_one",
     )
 
-    # Sanity check: no missing splits
+    # Confirm that every metadata row received a split label.
     assert df_meta_splits["split"].isna().sum() == 0
 
-    # Save full metadata with the split column for debugging/reference.
+    # Save the full metadata table with split labels for reference.
     full_meta_path = os.path.join(args.output_dir, "metadata_with_splits.csv")
     df_meta_splits.to_csv(full_meta_path, index=False)
     print(f"Wrote metadata with split column to: {full_meta_path}")
 
-    # Save split-specific metadata CSVs
+    # Save split-specific metadata CSVs.
     for split in ["train", "val", "test"]:
         split_df = df_meta_splits[df_meta_splits["split"] == split].reset_index(
             drop=True

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate dissertation-ready figures and tables from summary.csv plus project data files."""
+"""Generate project summary figures and tables from summary.csv plus project data files."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ from src.reporting.dissertation.tables import (
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Create dissertation figures/tables from summary.csv, project data files, "
+            "Create project summary figures/tables from summary.csv, project data files, "
             "and saved prediction outputs."
         )
     )
@@ -67,7 +67,7 @@ def parse_args() -> argparse.Namespace:
         default="results",
         help=(
             "Optional directory containing saved run folders (run_name-matched) "
-            "with saved predictions needed for ROC-based dissertation figures."
+            "with saved predictions needed for ROC-based summary figures."
         ),
     )
     parser.add_argument(
@@ -268,7 +268,7 @@ def main() -> None:
         dpi=args.dpi,
         results_run_dir=args.results_run_dir,
     )
-    print(f"Generated dissertation figures/tables in: {args.output_dir}")
+    print(f"Generated project summary figures/tables in: {args.output_dir}")
 
 
 if __name__ == '__main__':

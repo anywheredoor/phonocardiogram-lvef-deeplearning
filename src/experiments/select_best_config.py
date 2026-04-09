@@ -2,9 +2,9 @@
 """
 Select the best config per device from results/summary.csv.
 
-Rows without a train_device_filter (e.g., pooled runs) are ignored.
-For this workflow, mean test F1_pos is the main selection metric.
-This script is intended to run on CV-only rows.
+Rows without a training-device filter (for example pooled runs) are ignored.
+Mean test F1_pos is used as the primary selection metric.
+The script is intended for cross-validation summaries.
 """
 
 import argparse

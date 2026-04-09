@@ -459,8 +459,8 @@ def apply_checkpoint_args(args: argparse.Namespace, ckpt_args: dict) -> None:
             current_stats_path = (
                 str(current_value) if current_value is not None else ""
             )
-            # Old checkpoints may store environment-specific paths (e.g., Colab).
-            # If the checkpoint path is missing but the user provided a valid file,
+            # Older checkpoints may store environment-specific paths.
+            # If that path is unavailable but the user provided a valid file,
             # keep the user value instead of forcing a stale path.
             if (
                 ckpt_stats_path

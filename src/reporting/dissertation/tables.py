@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Table builders for dissertation summary outputs."""
+"""Table builders for generated summary outputs."""
 
 from __future__ import annotations
 

@@ -4,8 +4,8 @@ Datasets for PCG-based reduced-LVEF detection.
 
 PCGDataset
     - Loads WAVs listed in a split CSV.
-    - Applies resampling, 20-800 Hz band-pass, fixed-length crop/pad.
-    - Builds MFCC or gammatone time-frequency images.
+    - Applies resampling, 20-800 Hz band-pass filtering, and fixed-length center crop/pad.
+    - Builds MFCC or gammatone time-frequency representations.
     - Normalises with dataset-level mean/std if provided.
     - Outputs tensors shaped (3, image_size, image_size) plus binary label.
 """
@@ -23,7 +23,7 @@ import soundfile as sf
 import torchaudio.functional as AF
 import torchaudio.transforms as AT
 
-# Optional gammatone dependency
+# Optional dependency for gammatone representations.
 try:
     from gammatone.gtgram import gtgram
     HAVE_GAMMATONE = True
@@ -38,7 +38,7 @@ def ef_to_label(ef: float) -> int:
 
 class PCGDataset(Dataset):
     """
-    On-the-fly dataset that reads WAV files and builds spectrogram "images".
+    On-the-fly dataset that reads WAV files and builds time-frequency images.
 
     CSV requirements:
         - Columns: path, label, patient_id, device, ef
@@ -48,14 +48,14 @@ class PCGDataset(Dataset):
     def __init__(
         self,
         csv_path: str,
-        representation: str = "mfcc",  # "mfcc" or "gammatone"
+        representation: str = "mfcc",
         sample_rate: int = 2000,
-        fixed_duration: float = 4.0,  # seconds
+        fixed_duration: float = 4.0,
         image_size: int = 224,
         mean: Optional[float] = None,
         std: Optional[float] = None,
-        device_filter: Optional[List[str]] = None,  # e.g. ["iphone"]
-        position_filter: Optional[List[str]] = None,  # e.g. ["M"]
+        device_filter: Optional[List[str]] = None,
+        position_filter: Optional[List[str]] = None,
         clamp: bool = True,
     ):
         """
@@ -64,12 +64,10 @@ class PCGDataset(Dataset):
             representation: "mfcc" or "gammatone".
             sample_rate: Target sampling rate in Hz.
             fixed_duration: Waveform duration (seconds) after cropping/padding.
-            image_size: Output H=W size for the spectrogram image.
+            image_size: Output H=W size for the time-frequency image.
             mean, std: Optional z-score normalisation parameters.
-            device_filter: Optional list of device names to keep
-                (values from metadata 'device' column).
-            position_filter: Optional list of positions to keep
-                (values "A", "P", "M", "T").
+            device_filter: Optional list of device names to keep.
+            position_filter: Optional list of auscultation sites to keep.
             clamp: Whether to clamp the final image values to a fixed range.
         """
         super().__init__()
@@ -88,9 +86,7 @@ class PCGDataset(Dataset):
         self.std = std
         self.clamp = clamp
 
-        # ---------------------------------------------------------------------
-        # Load metadata
-        # ---------------------------------------------------------------------
+        # Load recording metadata.
         df = pd.read_csv(csv_path, dtype={"patient_id": str})
 
         required_cols = {"path", "label", "patient_id", "device", "ef"}
@@ -109,14 +105,12 @@ class PCGDataset(Dataset):
 
         self.df = df
 
-        # ---------------------------------------------------------------------
-        # Configure time-frequency transforms
-        # ---------------------------------------------------------------------
+        # Configure the requested time-frequency transform.
         if self.representation == "mfcc":
-            # MFCC configuration:
+            # MFCC configuration.
             n_mfcc = 40
-            n_fft = 128  # -> n_freqs = 65 (OK for 64 mels)
-            hop_length = int(0.01 * sample_rate)  # ~10 ms
+            n_fft = 128
+            hop_length = int(0.01 * sample_rate)
 
             self.tf_transform = AT.MFCC(
                 sample_rate=sample_rate,
@@ -132,21 +126,19 @@ class PCGDataset(Dataset):
                 },
             )
         else:
-            # Gammatonegram config using external `gammatone` package.
+            # Gammatone configuration via the external `gammatone` package.
             if not HAVE_GAMMATONE:
                 raise ImportError(
                     "Representation 'gammatone' requires the 'gammatone' package.\n"
                     "Install it with: pip install gammatone"
                 )
-            # Store gammatone parameters; computation is in _to_tf_representation.
-            self.gt_window_time = 0.04  # 40 ms windows
-            self.gt_hop_time = 0.01  # 10 ms hop
-            self.gt_channels = 64  # number of gammatone filters
-            self.gt_f_min = 20.0  # lowest frequency (Hz)
+            # Store the gammatone settings for use in _to_tf_representation.
+            self.gt_window_time = 0.04
+            self.gt_hop_time = 0.01
+            self.gt_channels = 64
+            self.gt_f_min = 20.0
 
-    # -------------------------------------------------------------------------
-    # Audio loading and preprocessing
-    # -------------------------------------------------------------------------
+    # Audio loading and preprocessing.
     def __len__(self) -> int:
         return len(self.df)
 
@@ -161,14 +153,14 @@ class PCGDataset(Dataset):
         if not os.path.isfile(path):
             raise FileNotFoundError(f"WAV file not found: {path}")
 
-        data, sr = sf.read(path, dtype="float32")  # data: np.ndarray
+        data, sr = sf.read(path, dtype="float32")
 
         if data.ndim == 1:
-            data = data[np.newaxis, :]       # [1, time]
+            data = data[np.newaxis, :]
         else:
-            data = data.T                    # [channels, time]
+            data = data.T
 
-        waveform = torch.from_numpy(data)    # [channels, time]
+        waveform = torch.from_numpy(data)
         return waveform, int(sr)
 
     def _resample_if_needed(self, waveform: torch.Tensor, orig_sr: int) -> torch.Tensor:
@@ -211,9 +203,7 @@ class PCGDataset(Dataset):
             pad_right = pad_total - pad_left
             return F.pad(waveform, (pad_left, pad_right))
 
-    # -------------------------------------------------------------------------
-    # Time-frequency and image conversion
-    # -------------------------------------------------------------------------
+    # Time-frequency conversion and image formatting.
     def _to_tf_representation(self, waveform: torch.Tensor) -> torch.Tensor:
         """
         Convert waveform to a time-frequency representation.
@@ -222,16 +212,15 @@ class PCGDataset(Dataset):
         Returns:
             spec: Tensor [freq, time]
         """
-        # Ensure single-channel
+        # Use a single channel if the recording contains multiple channels.
         if waveform.shape[0] > 1:
-            waveform = waveform[:1, :]  # [1, time]
+            waveform = waveform[:1, :]
 
         if self.representation == "mfcc":
-            # torchaudio MFCC expects [channel, time]
-            spec = self.tf_transform(waveform)  # [1, n_mfcc, time]
-            spec = spec[0]                      # [n_mfcc, time]
+            spec = self.tf_transform(waveform)
+            spec = spec[0]
         else:
-            # Gammatonegram via external gammatone.gtgram.gtgram
+            # Compute the gammatone representation with the external package.
             wave_np = waveform.squeeze(0).cpu().numpy()
 
             spec_np = gtgram(
@@ -242,14 +231,13 @@ class PCGDataset(Dataset):
                 channels=self.gt_channels,
                 f_min=self.gt_f_min,
             )
-            # gtgram returns [channels, time] (nonnegative magnitudes)
-            spec = torch.from_numpy(spec_np).to(torch.float32)  # [channels, time]
+            spec = torch.from_numpy(spec_np).to(torch.float32)
 
         return spec
 
     def _spec_to_image(self, spec: torch.Tensor) -> torch.Tensor:
         """
-        Convert [freq, time] spec to (3, image_size, image_size) tensor.
+        Convert a [freq, time] representation to a (3, image_size, image_size) tensor.
 
         Steps:
         - Add channel and batch dimensions
@@ -259,18 +247,17 @@ class PCGDataset(Dataset):
         - Apply z-score normalisation using dataset-level stats
         - Clamp to a reasonable range to avoid exploding activations
         """
-        # [freq, time] -> [1, 1, freq, time]
         spec = spec.unsqueeze(0).unsqueeze(0)
         spec = F.interpolate(
             spec,
             size=(self.image_size, self.image_size),
             mode="bilinear",
             align_corners=False,
-        )  # [1, 1, H, W]
-        spec = spec.squeeze(0)           # [1, H, W]
-        img = spec.repeat(3, 1, 1)       # [3, H, W]
+        )
+        spec = spec.squeeze(0)
+        img = spec.repeat(3, 1, 1)
 
-        # Make sure there are no NaNs or Infs in the image
+        # Replace non-finite values before normalisation.
         img = torch.nan_to_num(img, nan=0.0, posinf=0.0, neginf=0.0)
 
         mean = self.mean
@@ -279,14 +266,12 @@ class PCGDataset(Dataset):
             img = (img - mean) / (std + 1e-8)
 
         if self.clamp:
-            # Clamp after normalisation: keep values in a moderate range
+            # Clamp after normalisation to keep values in a moderate range.
             img = torch.clamp(img, min=-10.0, max=10.0)
 
         return img
 
-    # -------------------------------------------------------------------------
-    # Dataset protocol
-    # -------------------------------------------------------------------------
+    # Dataset protocol.
     def _row_to_example(
         self, row: pd.Series
     ) -> Tuple[torch.Tensor, int, Dict[str, Any]]:

@@ -6,7 +6,7 @@ Build a metadata table linking each PCG .wav file to:
 - binary EF label (1 if EF <= 40, else 0)
 - device (parsed from filename)
 - auscultation position (parsed from filename)
-- recording path as written from --heart_dir
+- recording path
 
 Run from the repository root, e.g.:
 
@@ -42,7 +42,7 @@ FILENAME_RE = re.compile(
 )
 
 # Map one-letter device codes to human-readable device names.
-# NOTE: Adjust if your convention is different.
+# Adjust this mapping if your filename convention differs.
 DEVICE_MAP = {
     "a": "android_phone",
     "i": "iphone",
@@ -98,7 +98,7 @@ def load_lvef_table(lvef_csv: str) -> pd.DataFrame:
     if after < before:
         print(f"Dropped {before - after} rows with missing EF values.")
 
-    # Ensure patient_id is string so it matches directory names
+    # Keep patient_id as a string so it matches the directory names.
     df["patient_id"] = df["patient_id"].astype(str)
 
     dup_mask = df.duplicated(subset=["patient_id"], keep=False)
@@ -126,7 +126,7 @@ def load_lvef_table(lvef_csv: str) -> pd.DataFrame:
 def build_metadata(
     df_lvef: pd.DataFrame, heart_dir: str
 ) -> pd.DataFrame:
-    # Map patient_id -> ef
+    # Map each patient_id to its EF value.
     ef_map: Dict[str, float] = (
         df_lvef.set_index("patient_id")["ef"].astype(float).to_dict()
     )
@@ -139,7 +139,8 @@ def build_metadata(
     for pid, ef in ef_map.items():
         patient_dir = os.path.join(heart_dir, pid)
         if not os.path.isdir(patient_dir):
-            # Not necessarily an error: maybe some EF entries have no recordings.
+            # Missing recordings are warnings because some labeled patients may not
+            # have an audio directory in the exported dataset.
             print(
                 f"Warning: no heart_sounds directory found for patient_id={pid} "
                 f"at {patient_dir}. Skipping this patient."
@@ -151,7 +152,7 @@ def build_metadata(
 
         for fname in os.listdir(patient_dir):
             if not fname.lower().endswith(".wav"):
-                continue  # Ignore non-wav files
+                continue
 
             m = FILENAME_RE.match(fname)
             if not m:
@@ -165,7 +166,7 @@ def build_metadata(
             device_code = m.group("device_code").lower()
             position = m.group("position").upper()
 
-            # Sanity check: filename patient_id vs directory name
+            # Warn if the filename patient_id does not match the directory name.
             if fname_pid != pid:
                 print(
                     f"Warning: patient_id mismatch for file '{fname}': "
@@ -180,7 +181,7 @@ def build_metadata(
                 {
                     "patient_id": str(pid),
                     "ef": float(ef),
-                    "label": int(float(ef) <= 40.0),  # 1 if EF <= 40 else 0
+                    "label": int(float(ef) <= 40.0),
                     "device_code": device_code,
                     "device": device,
                     "position": position,
@@ -199,7 +200,7 @@ def build_metadata(
 
     df_meta = pd.DataFrame(rows)
 
-    # Sort for reproducibility: by patient_id, then device, then position, then filename
+    # Sort rows deterministically for reproducible downstream outputs.
     df_meta = df_meta.sort_values(
         by=["patient_id", "device_code", "position", "filename"]
     ).reset_index(drop=True)

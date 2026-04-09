@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Figure builders for dissertation summary outputs."""
+"""Figure builders for generated summary outputs."""
 
 from __future__ import annotations
 
@@ -335,7 +335,7 @@ def plot_cv_performance_vs_parameter_tradeoff(
 
         for rep in REPRESENTATION_ORDER:
             draw_backbones = list(BACKBONE_ORDER)
-            # Ensure Android MFCC upside-down triangle (EfficientNet-B0) is visible on top.
+            # Draw the Android MFCC EfficientNet-B0 marker last so it stays visible.
             if device == "android_phone" and rep == "mfcc" and "efficientnet_b0" in draw_backbones:
                 draw_backbones = [b for b in draw_backbones if b != "efficientnet_b0"] + ["efficientnet_b0"]
             for backbone in draw_backbones:
@@ -346,7 +346,7 @@ def plot_cv_performance_vs_parameter_tradeoff(
                     backbone, {"marker": "o", "size": 66, "edgewidth": 0.95}
                 )
                 point_zorder = 3.2
-                # In Android panel, keep MFCC upside-down triangle above Gammatone square.
+                # Keep the overlapping Android markers in a stable draw order.
                 if device == "android_phone" and rep == "gammatone" and backbone == "mobilenetv3_large":
                     point_zorder = 3.0
                 if device == "android_phone" and rep == "mfcc" and backbone == "efficientnet_b0":
@@ -363,7 +363,7 @@ def plot_cv_performance_vs_parameter_tradeoff(
                     zorder=point_zorder,
                 )
 
-        # Highlight the selected best config used throughout the within-device reporting.
+        # Highlight the selected best configuration for this training device.
         best_row = cv_best[cv_best["train_device_filter"] == device]
         if not best_row.empty:
             best_backbone = str(best_row.iloc[0]["backbone"])
@@ -555,7 +555,7 @@ def plot_representation_effect_gammatone_minus_mfcc(
 def plot_source_model_transfer_roc_curves(
     views: Dict[str, pd.DataFrame], results_run_dir: Path, figures_dir: Path, dpi: int
 ) -> None:
-    """Figure 5: per-source ROC curves (within-device + two cross-device targets)."""
+    """Plot ROC curves for each source-device model on within-device and cross-device targets."""
     if not results_run_dir.exists():
         return
 
@@ -704,7 +704,7 @@ def plot_source_model_transfer_roc_curves(
 def plot_pooled_test_roc_comparison_pooled_vs_best_within_models(
     views: Dict[str, pd.DataFrame], results_run_dir: Path, figures_dir: Path, dpi: int
 ) -> None:
-    """Figure 6: pooled-test ROC comparison (pooled-device model vs three within-device best configs)."""
+    """Plot pooled-test ROC curves for the pooled-device model and the best within-device models."""
     if not results_run_dir.exists():
         return
 

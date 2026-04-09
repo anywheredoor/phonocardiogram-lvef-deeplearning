@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared helpers for dissertation figures and tables."""
+"""Shared helpers for generated figures and tables."""
 
 from __future__ import annotations
 
@@ -256,7 +256,7 @@ def extract_clean_views(df: pd.DataFrame, run_catalog: pd.DataFrame) -> Dict[str
     if not pool_per_device.empty:
         pool_per_device["target_device"] = pool_per_device["device"]
 
-    # Infer source device/model for cross-device eval rows by matching checkpoint_path
+    # Recover the source-device metadata for cross-device rows from the checkpoint path.
     if not cross_rows.empty and not final_overall.empty:
         final_map = final_overall[
             ["checkpoint_path", "train_device_filter", "representation", "backbone", "run_name"]
@@ -1002,7 +1002,7 @@ def _build_results_prediction_bundle(
     if not within_vs_pooled:
         return bundle
 
-    # Training histories for 3 final within-device runs + pooled run (if present)
+    # Load histories for the final within-device runs and the pooled-device run, when available.
     history_records: Dict[str, Dict[str, object]] = {}
     for _, r in final_overall.iterrows():
         run_name = str(r["run_name"])
