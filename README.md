@@ -3,7 +3,7 @@
 > [!NOTE]
 > I’m pleased to share that this project received an overall grade of **A**, based on the combined assessment of my final dissertation, oral defence, and continuous assessment.
 >
-> You can [read my final dissertation here](<dissertation/Final Dissertation - Wonjun Yang.pdf>).
+> You can [read or download my final dissertation here](<dissertation/Final Dissertation - Wonjun Yang.pdf>).
 >
 > Please note that the underlying human-participant dataset has not yet been publicly released and remains subject to ethics, privacy, publication, and data-governance requirements. For this reason, the dataset, derived artefacts, and trained model weights are not included in this repository.
 
