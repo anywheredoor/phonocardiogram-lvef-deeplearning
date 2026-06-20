@@ -1,6 +1,13 @@
 # Deep Learning Analysis of Smartphone and Digital Stethoscope Phonocardiograms for Detection of Reduced Left Ventricular Ejection Fraction
 
-This repository contains the code for my final year project for the Bachelor of Biomedical Sciences programme, Li Ka Shing Faculty of Medicine, The University of Hong Kong.
+This repository contains the code for my final year project for the Bachelor of Biomedical Sciences programme, Li Ka Shing Faculty of Medicine, the University of Hong Kong.
+
+> [!NOTE]
+> I’m pleased to share that this project received an overall grade of **A**, based on the combined assessment of my final dissertation, oral defence, and continuous assessment.
+>
+> You can [read my final dissertation here](<dissertation/Final Dissertation - Wonjun Yang.pdf>).
+>
+> Please note that the underlying human-participant dataset has not yet been publicly released and remains subject to ethics, privacy, publication, and data-governance requirements. For this reason, the dataset, derived artefacts, and trained model weights are not included in this repository.
 
 The project studies reduced left ventricular ejection fraction (LVEF) detection from phonocardiograms (PCGs) using deep learning. The main comparisons are:
 - within-device training and evaluation
@@ -37,8 +44,6 @@ I am grateful to **[Prof. Chun-Ka Wong](https://medic.hku.hk/en/Staff/University
 - [Preliminary Experiments](#preliminary-experiments)
 - [Citation](#citation)
 - [License](#license)
-
----
 
 ## Data Source and Study Context
 The heart sound and LVEF data used in this project come from a de-identified stratified random sample derived from [ClinicalTrials.gov NCT06070298](https://clinicaltrials.gov/study/NCT06070298). The registered study concerns smartphone-based phonocardiography for murmur detection, whereas this repository focuses on reduced-LVEF screening using the same heart-sound acquisition protocol.
