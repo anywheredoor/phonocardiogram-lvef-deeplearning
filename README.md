@@ -1,13 +1,13 @@
 # Deep Learning Analysis of Smartphone and Digital Stethoscope Phonocardiograms for Detection of Reduced Left Ventricular Ejection Fraction
 
-This repository contains the code for my final year project for the Bachelor of Biomedical Sciences programme, Li Ka Shing Faculty of Medicine, the University of Hong Kong.
-
 > [!NOTE]
 > I’m pleased to share that this project received an overall grade of **A**, based on the combined assessment of my final dissertation, oral defence, and continuous assessment.
 >
 > You can [read my final dissertation here](<dissertation/Final Dissertation - Wonjun Yang.pdf>).
 >
 > Please note that the underlying human-participant dataset has not yet been publicly released and remains subject to ethics, privacy, publication, and data-governance requirements. For this reason, the dataset, derived artefacts, and trained model weights are not included in this repository.
+
+This repository contains the code for my final year project for the Bachelor of Biomedical Sciences programme, Li Ka Shing Faculty of Medicine, the University of Hong Kong.
 
 The project studies reduced left ventricular ejection fraction (LVEF) detection from phonocardiograms (PCGs) using deep learning. The main comparisons are:
 - within-device training and evaluation
